@@ -1,0 +1,26 @@
+version: '3.9'
+services:
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: pnm-cbt-postgres
+    environment:
+      POSTGRES_USER: pnm_admin
+      POSTGRES_PASSWORD: pnm_secure_password_2026
+      POSTGRES_DB: db_cbt_d3ti_pnm
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./database/01_schema_postgresql.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./database/02_seed_academic_pnm.sql:/docker-entrypoint-initdb.d/02_seed.sql
+
+  backend-api:
+    build: ./backend
+    container_name: pnm-cbt-backend
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgres://pnm_admin:pnm_secure_password_2026@postgres-db:5432/db_cbt_d3ti_pnm
+      JWT_SECRET: PNM-D3TI-2026-CBT-HMAC-SHA256-SECRET
+    ports:
+      - "4000:4000"
+    depends_on:
+      - postgres-db

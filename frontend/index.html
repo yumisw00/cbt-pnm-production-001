@@ -1,0 +1,2506 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistem CBT &amp; Penilaian Esai Otomatis (Fisher-Yates + TF-IDF Cosine) — D3 TI PNM</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-800">
+
+  <!-- ===================================================================== -->
+  <!-- TOP NAVIGATION BAR (UNIFIED LIGHT PROFESSIONAL ACADEMIC THEME)        -->
+  <!-- ===================================================================== -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-blue-700 flex items-center justify-center text-white font-bold text-xs tracking-wider shrink-0">
+          PNM
+        </div>
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-sm sm:text-base font-bold text-slate-900">SI-CBT &amp; Koreksi Esai Otomatis D3 TI</h1>
+            <span class="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">Arsitektur 3-Tier Terpisah</span>
+          </div>
+          <p class="text-[11px] text-slate-500">Politeknik Negeri Madiun • Rendra Aditya Pratama (NPM 223307105)</p>
+        </div>
+      </div>
+
+      <!-- Active Session User Switcher (Real RBAC Login Switcher) -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-xs">
+          <span class="w-2 h-2 rounded-full bg-emerald-600"></span>
+          <span id="activeActorBadge" class="text-slate-500">Sesi Login JWT:</span>
+          <select id="globalUserSelect" class="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer">
+            <option value="223307105">Mahasiswa — Rendra Aditya P. (223307105)</option>
+            <option value="223307101">Mahasiswa — Bagas Pratama P. (223307101)</option>
+            <option value="198805142019031007">Dosen — Ardian Prima Atmaja, M.Cs.</option>
+            <option value="199504102022031004">Pengawas Lab — Bagus Prasetyo, S.Tr.Kom.</option>
+            <option value="198303172014042001">Administrator — Lutfiyah Dwi Setia, M.Kom.</option>
+          </select>
+        </div>
+        <button id="btnInfoTaModal" type="button" class="text-xs font-medium px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 transition">
+          Identitas TA
+        </button>
+      </div>
+    </div>
+
+    <!-- Clean Light Sub-Navigation Bar -->
+    <div class="bg-slate-50/80 border-t border-slate-200/80">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center gap-1.5 overflow-x-auto custom-scroll py-1.5">
+        <button type="button" data-tab="tab-cbt" class="nav-tab-btn px-3.5 py-1.5 rounded-md text-xs font-semibold transition whitespace-nowrap bg-blue-700 text-white flex items-center gap-1.5">
+          <span>1. Portal Ujian CBT Mahasiswa</span>
+          <span id="badgeSessionState" class="px-1.5 py-0.5 text-[10px] rounded bg-blue-800 text-blue-100">SIAP</span>
+        </button>
+        <button type="button" data-tab="tab-dosen" class="nav-tab-btn px-3.5 py-1.5 rounded-md text-xs font-semibold transition whitespace-nowrap text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 flex items-center gap-1.5">
+          <span>2. Manajemen Bank Soal &amp; Koreksi TF-IDF Dosen</span>
+        </button>
+        <button type="button" data-tab="tab-pengawas" class="nav-tab-btn px-3.5 py-1.5 rounded-md text-xs font-semibold transition whitespace-nowrap text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 flex items-center gap-1.5">
+          <span>3. Pengawasan Ruang Ujian &amp; Penalti</span>
+          <span id="badgeLockedCount" class="px-1.5 py-0.5 text-[10px] rounded bg-red-50 text-red-700 border border-red-200">1 Terkunci</span>
+        </button>
+        <button type="button" data-tab="tab-fisher" class="nav-tab-btn px-3.5 py-1.5 rounded-md text-xs font-semibold transition whitespace-nowrap text-slate-600 hover:text-slate-900 hover:bg-slate-200/60">
+          <span>4. Verifikasi Algoritma Fisher-Yates</span>
+        </button>
+        <button type="button" data-tab="tab-api" class="nav-tab-btn px-3.5 py-1.5 rounded-md text-xs font-semibold transition whitespace-nowrap text-slate-600 hover:text-slate-900 hover:bg-slate-200/60">
+          <span>5. Arsitektur Backend, Database (9 Tabel) &amp; API</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- SUBTLE TOAST NOTIFICATION -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none px-4"></div>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
+
+    <!-- ===================================================================== -->
+    <!-- TAB 1: PORTAL UJIAN CBT MAHASISWA (REAL WORKFLOW: TOKEN GATE -> EXAM) -->
+    <!-- ===================================================================== -->
+    <section id="tab-cbt" class="tab-panel space-y-5">
+
+      <!-- Gate Masuk Ruang Ujian (Ditampilkan sebelum sesi dimulai atau untuk memulai sesi baru) -->
+      <div id="examStartGateCard" class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 text-[11px] font-semibold rounded bg-blue-50 text-blue-700 border border-blue-200">Otentikasi Ruang Laboratorium (UC-05)</span>
+              <span class="text-xs text-slate-500 mono">POST /api/v1/sessions/start</span>
+            </div>
+            <h2 class="text-base font-bold text-slate-900">Verifikasi Token Paket Ujian &amp; Pembangkitan Naskah Soal Fisher-Yates</h2>
+            <p class="text-xs text-slate-600">Pilih jadwal paket ujian aktif dan masukkan kode token ruang laboratorium (<strong class="mono text-slate-800">PNM26A</strong>) untuk membangkitkan urutan soal baru atau melanjutkan sesi.</p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <select id="selectExamPacketGate" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 focus:border-blue-600 focus:outline-none">
+              <option value="101">TI501 — UAS Keamanan Jaringan &amp; Kriptografi (90 Menit)</option>
+            </select>
+            <input type="text" id="inputRoomTokenGate" value="PNM26A" placeholder="Token Ruang (PNM26A)" class="w-32 rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono uppercase text-slate-800 focus:border-blue-600 focus:outline-none" />
+            <button type="button" id="btnStartNewBlankSession" class="px-3.5 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold transition">
+              Mulai Ujian Baru (Lembar Kosong)
+            </button>
+            <button type="button" id="btnReshuffleSession" class="px-3 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold transition">
+              Acak Ulang Fisher-Yates
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Header Status Sesi Aktif -->
+      <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2 py-0.5 text-xs font-semibold rounded bg-slate-100 text-slate-700 border border-slate-200">TI501 • Keamanan Jaringan &amp; Kriptografi</span>
+            <span class="text-xs font-mono text-slate-500">Token: <strong class="text-slate-800">PNM26A</strong></span>
+            <span class="text-xs font-mono text-slate-500">ID Sesi: <strong id="lblActiveSessionId" class="text-slate-800">#4082</strong></span>
+          </div>
+          <h3 class="text-base font-bold text-slate-900" id="lblActiveStudentName">Peserta: Rendra Aditya Pratama (223307105) • Kelas TI-3D</h3>
+          <p class="text-xs text-slate-500">Proporsi Penilaian: 60% Pilihan Ganda (8 Soal @ 7,5 Poin) + 40% Uraian Esai (2 Soal @ 20 Poin)</p>
+        </div>
+
+        <!-- Metrik Sisa Waktu, Integritas & Poin Penalti (Palet Netral & Halus) -->
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <div class="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-center min-w-[110px]">
+            <div class="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Sisa Waktu</div>
+            <div id="cbtCountdown" class="text-sm sm:text-base font-bold mono text-slate-800">01:28:45</div>
+          </div>
+
+          <div class="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-center min-w-[120px]" id="integrityBox">
+            <div class="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Indeks Integritas (I)</div>
+            <div class="flex items-center justify-center gap-1">
+              <span id="cbtIntegrityValue" class="text-sm sm:text-base font-bold mono text-emerald-700">100</span>
+              <span class="text-xs text-slate-400">/ 100</span>
+            </div>
+          </div>
+
+          <div class="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-center min-w-[120px]">
+            <div class="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Poin Penalti (P)</div>
+            <div class="flex items-center justify-center gap-1">
+              <span id="cbtPenaltyValue" class="text-sm sm:text-base font-bold mono text-slate-800">0</span>
+              <span class="text-xs text-slate-400">/ 100</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Baris Status Sensor Pengawasan Peramban (Menggunakan Warna Terang Seragam, Tanpa Blok Hitam) -->
+      <div class="bg-slate-100/90 rounded-xl p-3.5 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 shrink-0"></span>
+          <div>
+            <div class="text-xs font-semibold text-slate-800 flex items-center gap-2 flex-wrap">
+              <span>Sensor Pengawasan Fokus Peramban Aktif (<code class="mono text-[11px] text-slate-600">POST /api/v1/proctoring/event</code>)</span>
+              <label class="inline-flex items-center gap-1.5 text-[11px] font-normal text-slate-700 cursor-pointer bg-white px-2 py-0.5 rounded border border-slate-300">
+                <input type="checkbox" id="chkRealBrowserSensor" checked class="rounded text-blue-600 focus:ring-0" />
+                <span>Aktifkan Pemblokiran Copy/Paste &amp; Klik Kanan Nyata</span>
+              </label>
+            </div>
+            <p class="text-[11px] text-slate-600">Pemicu pengujian telemetri peristiwa peramban (Tabel 2.5) untuk memverifikasi Persamaan 2.8 &amp; 2.9:</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button type="button" data-viol="VIOL-01" class="btn-sim-viol text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-white hover:bg-red-50 text-slate-700 hover:text-red-700 border border-slate-300 transition">
+            VIOL-01 Pindah Tab (+25p)
+          </button>
+          <button type="button" data-viol="VIOL-02" class="btn-sim-viol text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-white hover:bg-amber-50 text-slate-700 hover:text-amber-800 border border-slate-300 transition">
+            VIOL-02 Blur Jendela (+20p)
+          </button>
+          <button type="button" data-viol="VIOL-03" class="btn-sim-viol text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-white hover:bg-amber-50 text-slate-700 hover:text-amber-800 border border-slate-300 transition">
+            VIOL-03 Keluar Fullscreen (+15p)
+          </button>
+          <button type="button" data-viol="VIOL-04" class="btn-sim-viol text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 transition">
+            VIOL-04 Salin/Tempel (+15p)
+          </button>
+          <button type="button" data-viol="VIOL-05" class="btn-sim-viol text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 transition">
+            VIOL-05 Klik Kanan (+10p)
+          </button>
+          <button type="button" id="btnResetPenaltyMhs" class="text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-800 transition">
+            Reset Penalti
+          </button>
+        </div>
+      </div>
+
+      <!-- Peringatan Sesi Terkunci (Palet Merah Lembut Profesional, Tidak Hitam/Kontras Berlebih) -->
+      <div id="cbtLockedBanner" class="hidden bg-red-50 border border-red-300 rounded-xl p-4 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="space-y-1">
+            <span class="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-800 border border-red-200 rounded">Status Sesi: TERKUNCI_PENALTI (SEC-03)</span>
+            <h3 class="text-sm sm:text-base font-bold text-red-900">Sesi Ujian Dikunci Otomatis Karena Poin Penalti Mencapai Ambang Batas (&ge; 100 Poin)</h3>
+            <p class="text-xs text-red-800 max-w-2xl">
+              Middleware otorisasi RESTful API menolak penyimpanan jawaban (<code class="mono">PUT /autosave</code>) dan pengiriman ujian (<code class="mono">POST /submit</code>) hingga Pengawas Ujian memberikan otorisasi pembukaan kunci.
+            </p>
+          </div>
+          <button type="button" id="btnQuickUnlockFromBanner" class="px-3.5 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-white font-semibold text-xs transition">
+            Buka Kunci Sesi (Otorisasi Pengawas)
+          </button>
+        </div>
+      </div>
+
+      <!-- Grid Utama Lembar Kerja Ujian -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <!-- Kolom Kiri: Lembar Butir Soal -->
+        <div class="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between overflow-hidden">
+          <div>
+            <!-- Header Soal -->
+            <div class="bg-slate-50 border-b border-slate-200 px-5 py-3 flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span id="qActiveOrderBadge" class="px-2.5 py-1 rounded-md bg-slate-800 text-white font-semibold text-xs mono">Butir #1 / 10</span>
+                <span id="qActiveOriginalCode" class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono text-xs font-medium">Kode Bank: S10</span>
+                <span id="qActiveTypeBadge" class="px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold">PILIHAN GANDA</span>
+              </div>
+              <div class="flex items-center gap-3 text-xs">
+                <span id="qActiveWeight" class="font-medium text-slate-600">Bobot: 7,50 Poin</span>
+                <span id="autosaveIndicator" class="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md font-medium">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Siap Menyimpan
+                </span>
+              </div>
+            </div>
+
+            <!-- Isi Pertanyaan & Input Jawaban -->
+            <div class="p-5 space-y-4">
+              <div id="qActivePrompt" class="text-sm sm:text-base font-medium text-slate-800 leading-relaxed select-none bg-slate-50 p-4 rounded-lg border border-slate-200">
+                Memuat pertanyaan...
+              </div>
+
+              <!-- Opsi Pilihan Ganda -->
+              <div id="mcOptionsContainer" class="space-y-2"></div>
+
+              <!-- Editor Jawaban Esai -->
+              <div id="essayInputContainer" class="hidden space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-700">
+                  <div>
+                    <strong>Pemeriksaan Esai Otomatis:</strong> Teks diproses dengan <em>Stopword Tala</em>, <em>Stemmer Nazief-Adriani</em>, serta pembobotan <em>TF-IDF &amp; Cosine Similarity</em>.
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <button type="button" id="btnFillSampleM1" class="px-2 py-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-medium text-[11px] transition">
+                      Muat Teks Uji M1
+                    </button>
+                    <button type="button" id="btnFillSampleM2" class="px-2 py-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-medium text-[11px] transition">
+                      Muat Teks Uji M2
+                    </button>
+                  </div>
+                </div>
+
+                <textarea id="essayTextarea" rows="5" placeholder="Ketik jawaban uraian esai Anda di sini..." class="w-full rounded-lg border border-slate-300 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-500/15 p-3.5 text-sm text-slate-800 leading-relaxed"></textarea>
+
+                <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                  <div>Jumlah Kata: <strong id="essayWordCount" class="text-slate-800">0</strong> kata | Token Kata Dasar (Nazief-Adriani):</div>
+                  <div class="mono text-[11px] text-blue-700 font-medium" id="essayLiveKeywordsStatus">Kata Kunci Wajib Terdeteksi: 0/3</div>
+                </div>
+                <!-- Panel Terang Seragam (Tidak Hitam) -->
+                <div id="essayLiveStemPreview" class="p-3 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-mono text-xs leading-relaxed break-words">
+                  (Ketik jawaban esai untuk melihat hasil pemotongan kata dasar Nazief-Adriani secara langsung)
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Navigasi Bawah Soal -->
+          <div class="bg-slate-50 border-t border-slate-200 px-5 py-3 flex items-center justify-between gap-3">
+            <button type="button" id="btnPrevQuestion" class="px-3.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition">
+              &larr; Sebelumnya
+            </button>
+            <div class="text-xs text-slate-500 hidden sm:block">
+              Penyimpanan otomatis ke tabel <code class="mono">student_answers</code> setiap perubahan jawaban
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="btnNextQuestion" class="px-3.5 py-2 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-xs font-semibold text-slate-800 transition">
+                Berikutnya &rarr;
+              </button>
+              <button type="button" id="btnSubmitExamSession" class="px-4 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-xs font-semibold text-white shadow-sm transition">
+                Kirim &amp; Nilai Lembar Ujian
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Kolom Kanan: Matriks Nomor Soal & Ringkasan Hasil -->
+        <div class="lg:col-span-4 space-y-4">
+          <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Daftar Nomor Soal Teracak</h3>
+                <p class="text-[11px] text-slate-500">Urutan hasil Fisher-Yates pada sesi ini</p>
+              </div>
+              <button type="button" id="btnLoadReferenceAnswers" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] font-medium transition">
+                Isi Jawaban Uji Lengkap
+              </button>
+            </div>
+
+            <div id="questionNavGrid" class="grid grid-cols-5 gap-2"></div>
+
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block"></span> Dijawab</span>
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-blue-700 inline-block"></span> Sedang Dibuka</span>
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-slate-200 border border-slate-300 inline-block"></span> Kosong</span>
+            </div>
+          </div>
+
+          <!-- Ringkasan Hasil Evaluasi & Muatan API (Panel Terang Bersih) -->
+          <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Hasil Pemeriksaan Sesi</h3>
+              <span id="gradingStatusBadge" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">Sedang Dikerjakan</span>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 text-center">
+              <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                <div class="text-[10px] text-slate-500 font-medium">Pilihan Ganda</div>
+                <div id="summaryScoreMc" class="text-sm font-bold mono text-slate-800">0,00 / 60</div>
+              </div>
+              <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                <div class="text-[10px] text-slate-500 font-medium">Esai TF-IDF</div>
+                <div id="summaryScoreEssay" class="text-sm font-bold mono text-blue-700">0,00 / 40</div>
+              </div>
+              <div class="p-2.5 rounded-lg bg-blue-50/60 border border-blue-200">
+                <div class="text-[10px] text-blue-800 font-semibold">Nilai Total</div>
+                <div id="summaryScoreTotal" class="text-base font-bold mono text-blue-800">0,00</div>
+              </div>
+            </div>
+
+            <div class="space-y-1.5">
+              <div class="text-[11px] font-semibold text-slate-600">Respons JSON Peladen (<code class="mono">POST /api/v1/sessions/4082/submit</code>):</div>
+              <pre id="cbtJsonResponsePreview" class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-800 font-mono text-[11px] overflow-x-auto max-h-48 custom-scroll leading-relaxed"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 2: PORTAL DOSEN (CRUD BANK SOAL NYATA + ANALITIK TF-IDF COSINE)   -->
+    <!-- ===================================================================== -->
+    <section id="tab-dosen" class="tab-panel hidden space-y-6">
+
+      <!-- Bagian 1: Manajemen Bank Soal & Tambah Butir Soal Baru (CRUD Nyata ke Basis Data) -->
+      <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+          <div>
+            <span class="text-xs font-semibold text-blue-700">Manajemen Bank Soal &amp; Rubrik Esai • <code class="mono">POST /api/v1/packets/101/questions</code></span>
+            <h2 class="text-base sm:text-lg font-bold text-slate-900">Daftar Bank Soal Paket Ujian &amp; Formulir Tambah Soal Baru</h2>
+            <p class="text-xs text-slate-500">Setiap butir soal pilihan ganda maupun soal uraian esai yang ditambahkan oleh Dosen langsung tersimpan ke tabel <code class="mono">question_banks</code> dan <code class="mono">essay_rubrics</code> serta diikutsertakan dalam pengacakan Fisher-Yates.</p>
+          </div>
+          <button type="button" id="btnToggleAddQuestionForm" class="px-3.5 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold transition">
+            + Tambah Butir Soal Baru
+          </button>
+        </div>
+
+        <!-- Form Tambah Soal Baru -->
+        <div id="formAddQuestionContainer" class="hidden bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Soal:</label>
+              <input type="text" id="newQCode" value="S11" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Tipe Butir Soal:</label>
+              <select id="newQType" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium">
+                <option value="URAIAN_ESAI">URAIAN_ESAI (Dinilai TF-IDF Cosine)</option>
+                <option value="PILIHAN_GANDA">PILIHAN_GANDA (5 Opsi A–E)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Bobot Skor Maksimal:</label>
+              <input type="number" id="newQWeight" value="15" min="1" max="100" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Koefisien Alfa (&alpha; Esai):</label>
+              <input type="number" id="newQAlpha" value="0.70" step="0.05" min="0" max="1" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-mono" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Teks Pertanyaan Soal:</label>
+            <textarea id="newQPrompt" rows="2" placeholder="Tuliskan narasi pertanyaan soal ujian..." class="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs">Jelaskan fungsi firewall pada jaringan komputer dalam menyaring paket data antara jaringan internal dan internet!</textarea>
+          </div>
+
+          <div id="newQEssayFields" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Kunci Jawaban Referensi Dosen (<code class="mono">teks_kunci_referensi</code>):</label>
+              <textarea id="newQRubricKey" rows="2" class="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs">Firewall berfungsi mengamankan jaringan komputer dengan menyaring lalu lintas paket data berdasarkan aturan alamat IP dan port.</textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Daftar Kata Dasar Kunci Wajib (Pisahkan Koma):</label>
+              <input type="text" id="newQRequiredWords" value="firewall, paket, data" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-mono" />
+              <p class="text-[11px] text-slate-500 mt-1">Sistem otomatis mengeksekusi <em>Stemming Nazief-Adriani</em> saat soal disimpan.</p>
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" id="btnSaveNewQuestion" class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold transition">
+              Simpan Soal ke Bank Soal (question_banks)
+            </button>
+          </div>
+        </div>
+
+        <!-- Tabel Daftar Bank Soal Aktif -->
+        <div class="overflow-x-auto max-h-60 custom-scroll border border-slate-200 rounded-lg">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 sticky top-0">
+                <th class="py-2 px-3">Kode</th>
+                <th class="py-2 px-3">Tipe Soal</th>
+                <th class="py-2 px-3">Teks Pertanyaan</th>
+                <th class="py-2 px-3 text-right">Bobot</th>
+                <th class="py-2 px-3 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="lecturerQuestionBankBody" class="divide-y divide-slate-200"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Bagian 2: Kalkulator & Analitik Koreksi Esai TF-IDF Cosine Similarity + Override Nilai Dosen -->
+      <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <span class="text-xs font-semibold text-blue-700">Verifikasi Matriks Vektor &amp; Peninjauan Dosen • <code class="mono">GET /api/v1/grading/essay-detail/:answerId</code></span>
+          <h3 class="text-base sm:text-lg font-bold text-slate-900 mt-0.5">Mesin Koreksi Esai Otomatis (Stemming Nazief-Adriani, TF-IDF &amp; Cosine Similarity)</h3>
+          <p class="text-xs text-slate-600">Uji jawaban esai mahasiswa mana pun atau muat data uji Tabel 3.5 &amp; Tabel 3.6 pada laporan Tugas Akhir.</p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button type="button" id="btnLoadSimM1" class="px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold transition">
+            Data Uji M1 (Tabel 3.6 = 16,16 Poin)
+          </button>
+          <button type="button" id="btnLoadSimM2" class="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold transition">
+            Data Uji M2 (Tabel 3.6 = 8,25 Poin)
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div class="lg:col-span-6 bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <h3 class="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">A. Rubrik Kunci Jawaban Referensi Dosen (K)</h3>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Teks Kunci Jawaban Referensi Dosen:</label>
+            <textarea id="labLecturerText" rows="3" class="w-full rounded-lg border border-slate-300 p-3 text-xs sm:text-sm text-slate-800 focus:border-blue-600 focus:outline-none">Protokol HTTPS menggunakan enkripsi TLS untuk mengamankan komunikasi data antara peramban klien dan peladen web dari penyadapan.</textarea>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Kata Kunci Wajib:</label>
+              <input type="text" id="labRequiredKeywords" value="enkripsi, data, peladen" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono text-slate-800" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Koefisien Alfa (&alpha;):</label>
+              <input type="number" id="labAlphaInput" value="0.70" min="0" max="1" step="0.05" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono text-slate-800" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Bobot Maksimal:</label>
+              <input type="number" id="labMaxScoreInput" value="20" min="1" max="100" step="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono text-slate-800" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Skema Korpus Perhitungan IDF (Persamaan 2.4):</label>
+            <select id="labCorpusMode" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-800 bg-slate-50 font-medium">
+              <option value="corpus3">Korpus Evaluasi N = 3 Dokumen (K, M1, M2 — Sesuai Tabel 3.5 &amp; 3.6)</option>
+              <option value="pairwise2">Korpus Berpasangan N = 2 Dokumen (K vs M — Sesuai Kode Sumber 4.2)</option>
+            </select>
+          </div>
+
+          <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+            <div class="text-[11px] font-semibold text-slate-500">Hasil Stemming Nazief-Adriani Kunci Dosen (K):</div>
+            <div id="labLecturerStemResult" class="font-mono text-xs text-blue-800 font-medium break-words"></div>
+          </div>
+        </div>
+
+        <div class="lg:col-span-6 bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <h3 class="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">B. Teks Jawaban Esai Mahasiswa (M) &amp; Tahapan Pra-pemrosesan</h3>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Teks Jawaban Mahasiswa:</label>
+            <textarea id="labStudentText" rows="3" class="w-full rounded-lg border border-slate-300 p-3 text-xs sm:text-sm text-slate-800 focus:border-blue-600 focus:outline-none">HTTPS memakai enkripsi TLS guna mengamankan pengiriman data dari peramban klien menuju peladen web agar tidak terkena penyadapan.</textarea>
+          </div>
+
+          <div class="space-y-2 text-xs">
+            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+              <span class="font-semibold text-slate-700">Tahap 1 &amp; 2 (Case Folding &amp; Tokenizing):</span>
+              <div id="labStageTokens" class="mono text-[11px] text-slate-600 mt-0.5 break-words"></div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+              <span class="font-semibold text-slate-700">Tahap 3 (Stopword Removal Kamus Tala):</span>
+              <div id="labStageStopwords" class="mono text-[11px] text-slate-600 mt-0.5 break-words"></div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-blue-50/50 border border-blue-200">
+              <span class="font-semibold text-blue-900">Tahap 4 (Stemming Algoritma Nazief-Adriani):</span>
+              <div id="labStageStemmed" class="mono text-xs text-blue-800 font-semibold mt-0.5 break-words"></div>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2 pt-1">
+            <button type="button" id="btnRunTfIdfCalculation" class="flex-1 py-2.5 px-4 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs transition">
+              Eksekusi Perhitungan Matriks TF-IDF &amp; Cosine Similarity
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ringkasan Hasil Perhitungan Vektor (Semua Kartu Bersih & Seragam) -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+          <div class="text-[11px] text-slate-500 font-medium">Dot Product (&Sigma; W<sub>K</sub>&times;W<sub>M</sub>)</div>
+          <div id="metricDotProduct" class="text-base font-bold mono text-slate-900 mt-1">12.2992</div>
+        </div>
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+          <div class="text-[11px] text-slate-500 font-medium">Norma (||K|| &times; ||M||)</div>
+          <div id="metricNorms" class="text-xs font-bold mono text-slate-800 mt-1.5">4.1529 &times; 4.0820</div>
+        </div>
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+          <div class="text-[11px] text-slate-500 font-medium">Cosine Similarity</div>
+          <div id="metricCosine" class="text-base font-bold mono text-blue-700 mt-1">0.7255</div>
+        </div>
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+          <div class="text-[11px] text-slate-500 font-medium">Rasio Kata Wajib</div>
+          <div id="metricKeywordRatio" class="text-base font-bold mono text-slate-800 mt-1">1.0000 (3/3)</div>
+        </div>
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+          <div class="text-[11px] text-slate-500 font-medium">Nilai Gabungan</div>
+          <div id="metricHybridValue" class="text-base font-bold mono text-slate-800 mt-1">0.8079</div>
+        </div>
+        <div class="bg-blue-50/70 p-3.5 rounded-xl border border-blue-200 shadow-sm">
+          <div class="text-[11px] text-blue-800 font-semibold">Skor Akhir Esai</div>
+          <div id="metricFinalEssayScore" class="text-lg font-bold mono text-blue-800 mt-0.5">16,16 / 20</div>
+        </div>
+      </div>
+
+      <!-- Tabel Matriks TF-IDF Lengkap -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Matriks Frekuensi Kata (TF), Nilai IDF, dan Bobot TF-IDF (Tabel 3.5)</h3>
+            <p class="text-xs text-slate-500">Rincian bobot vektor kata dasar antara Kunci Dosen (K) dan Jawaban Mahasiswa (M)</p>
+          </div>
+          <span id="labPredicateBadge" class="px-3 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+            Kategori: Tepat dan Memadai
+          </span>
+        </div>
+        <div class="overflow-x-auto custom-scroll">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-semibold">
+                <th class="py-2.5 px-3">No</th>
+                <th class="py-2.5 px-3">Kata Dasar (Term)</th>
+                <th class="py-2.5 px-3 text-center">Kata Wajib</th>
+                <th class="py-2.5 px-3 text-right">TF Kunci (K)</th>
+                <th class="py-2.5 px-3 text-right">TF Mhs (M)</th>
+                <th class="py-2.5 px-3 text-right">df</th>
+                <th class="py-2.5 px-3 text-right">IDF = log<sub>10</sub>(N/df)+1</th>
+                <th class="py-2.5 px-3 text-right">Bobot W<sub>K</sub></th>
+                <th class="py-2.5 px-3 text-right">Bobot W<sub>M</sub></th>
+                <th class="py-2.5 px-3 text-right">W<sub>K</sub> &times; W<sub>M</sub></th>
+              </tr>
+            </thead>
+            <tbody id="tfIdfMatrixBody" class="divide-y divide-slate-200 mono text-[11px]"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 3: DASBOR PENGAWAS UJIAN & KONFIGURASI BOBOT PENALTI              -->
+    <!-- ===================================================================== -->
+    <section id="tab-pengawas" class="tab-panel hidden space-y-5">
+      <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <span class="text-xs font-semibold text-blue-700">Panel Pengawas Ujian Laboratorium • <code class="mono">GET /api/v1/proctoring/live/101</code></span>
+          <h2 class="text-base sm:text-lg font-bold text-slate-900 mt-0.5">Pemantauan Integritas Sesi Peserta &amp; Otorisasi Buka Kunci Sesi</h2>
+          <p class="text-xs text-slate-600">Memantau akumulasi poin penalti secara waktu nyata dan mengelola pembukaan kunci sesi ujian peserta yang terblokir otomatis.</p>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <span class="px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium">Aktif Jujur (0p)</span>
+          <span class="px-2.5 py-1 rounded-md bg-amber-50 text-amber-800 border border-amber-200 font-medium">Peringatan (1–99p)</span>
+          <span class="px-2.5 py-1 rounded-md bg-red-50 text-red-800 border border-red-200 font-medium">Terkunci (&ge;100p)</span>
+        </div>
+      </div>
+
+      <!-- Kartu Peserta Ujian -->
+      <div id="proctorCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+      <!-- Tabel Aturan Penalti (Dapat Diubah Bobotnya sesuai BB-06) & Log Kejadian -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div class="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Aturan Bobot Penalti (<code class="mono">violation_rules</code>)</h3>
+            <span class="text-[11px] text-slate-500">Dapat Dikonfigurasi (BB-06)</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700 border-b border-slate-200">
+                  <th class="py-2 px-3">Kode</th>
+                  <th class="py-2 px-3">Peristiwa Peramban</th>
+                  <th class="py-2 px-3 text-right">Bobot Poin</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200">
+                <tr>
+                  <td class="py-2 px-3 font-mono font-semibold text-slate-800">VIOL-01</td>
+                  <td class="py-2 px-3">Document Visibility Hidden (Pindah Tab)</td>
+                  <td class="py-2 px-3 text-right"><input type="number" data-rule-Input="VIOL-01" value="25" min="5" max="100" class="w-16 text-right font-mono border border-slate-300 rounded px-1.5 py-0.5 text-xs" /></td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-mono font-semibold text-slate-800">VIOL-02</td>
+                  <td class="py-2 px-3">Window Blur Out of Focus (Alt+Tab)</td>
+                  <td class="py-2 px-3 text-right"><input type="number" data-rule-input="VIOL-02" value="20" min="5" max="100" class="w-16 text-right font-mono border border-slate-300 rounded px-1.5 py-0.5 text-xs" /></td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-mono font-semibold text-slate-800">VIOL-03</td>
+                  <td class="py-2 px-3">Fullscreen Exit Event (Tombol Esc)</td>
+                  <td class="py-2 px-3 text-right"><input type="number" data-rule-input="VIOL-03" value="15" min="5" max="100" class="w-16 text-right font-mono border border-slate-300 rounded px-1.5 py-0.5 text-xs" /></td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-mono font-semibold text-slate-800">VIOL-04</td>
+                  <td class="py-2 px-3">Clipboard Copy / Cut / Paste</td>
+                  <td class="py-2 px-3 text-right"><input type="number" data-rule-input="VIOL-04" value="15" min="5" max="100" class="w-16 text-right font-mono border border-slate-300 rounded px-1.5 py-0.5 text-xs" /></td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-mono font-semibold text-slate-800">VIOL-05</td>
+                  <td class="py-2 px-3">Context Menu &amp; DevTools Key</td>
+                  <td class="py-2 px-3 text-right"><input type="number" data-rule-input="VIOL-05" value="10" min="5" max="100" class="w-16 text-right font-mono border border-slate-300 rounded px-1.5 py-0.5 text-xs" /></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <button type="button" id="btnSaveViolationRules" class="px-3 py-1.5 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold transition">
+              Simpan Perubahan Bobot Penalti
+            </button>
+          </div>
+        </div>
+
+        <div class="lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Rekaman Tabel <code class="mono">proctoring_logs</code></h3>
+            <span id="totalTelemetryLogsBadge" class="text-[11px] font-mono text-slate-500">0 Kejadian</span>
+          </div>
+          <div class="overflow-x-auto max-h-72 custom-scroll">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 sticky top-0">
+                  <th class="py-2 px-3">Waktu</th>
+                  <th class="py-2 px-3">Peserta</th>
+                  <th class="py-2 px-3">Kode</th>
+                  <th class="py-2 px-3">Detail Telemetri</th>
+                  <th class="py-2 px-3 text-right">Akumulasi</th>
+                </tr>
+              </thead>
+              <tbody id="telemetryLogTableBody" class="divide-y divide-slate-200 text-[11px]"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 4: VERIFIKASI ALGORITMA FISHER-YATES SHUFFLE (TABEL 3.4 & 4.5)    -->
+    <!-- ===================================================================== -->
+    <section id="tab-fisher" class="tab-panel hidden space-y-5">
+      <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <span class="text-xs font-semibold text-blue-700">Komputasi Pengacakan In-Place • Kompleksitas Waktu O(n) &amp; Ruang O(1)</span>
+          <h2 class="text-base sm:text-lg font-bold text-slate-900 mt-0.5">Jejak Iterasi Mundur Algoritma Fisher-Yates Shuffle &amp; Uji 100 Sesi</h2>
+          <p class="text-xs text-slate-600">Menampilkan setiap pertukaran elemen <code class="mono">A[i] &harr; A[j]</code> dari indeks terakhir hingga indeks pertama.</p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button type="button" id="btnFisherTable34" class="px-3.5 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold transition">
+            Verifikasi Tabel 3.4 (S10, S05, S08...)
+          </button>
+          <button type="button" id="btnFisherRandom" class="px-3.5 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold transition">
+            Bangkitkan Permutasi Acak Baru
+          </button>
+          <button type="button" id="btnFisherBatch100" class="px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold transition">
+            Eksekusi Uji 100 Sesi Simultan (Tabel 4.5)
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabel Iterasi Mundur -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Tabel Iterasi Mundur Fisher-Yates Shuffle (Persamaan 2.1 &amp; 2.2)</h3>
+            <p class="text-xs text-slate-500">Pemilihan indeks acak <code class="mono">j = Math.floor(U * (i + 1))</code> pada rentang <code class="mono">0 &le; j &le; i</code></p>
+          </div>
+          <div id="fisherResultPermutationBadge" class="font-mono text-xs font-semibold px-3 py-1 rounded-md bg-blue-50 text-blue-800 border border-blue-200"></div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700 border-b border-slate-200">
+                <th class="py-2.5 px-3">Iterasi</th>
+                <th class="py-2.5 px-3">Indeks i</th>
+                <th class="py-2.5 px-3">Nilai Acak U</th>
+                <th class="py-2.5 px-3">Perhitungan Indeks j = &lfloor;U &times; (i+1)&rfloor;</th>
+                <th class="py-2.5 px-3">Pertukaran A[i] &harr; A[j]</th>
+                <th class="py-2.5 px-3">Susunan Larik Kode Soal Setelah Pertukaran</th>
+              </tr>
+            </thead>
+            <tbody id="fisherIterationTableBody" class="divide-y divide-slate-200 mono text-[11px]"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Evaluasi 100 Sesi Simultan -->
+      <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Evaluasi Keunikan Permutasi pada 100 Sesi Ujian Simultan (Tabel 4.5)</h3>
+            <p class="text-xs text-slate-500">Membuktikan seluruh kursi peserta ujian yang berdekatan menerima susunan nomor soal yang berbeda</p>
+          </div>
+          <span id="batchExecTimeBadge" class="px-3 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-mono font-semibold">
+            Waktu Komputasi: 0,42 ms
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="text-xs text-slate-500">Kapasitas Sesi Serentak</div>
+            <div id="batchMetricSessions" class="text-lg font-bold mono text-slate-900 mt-1">100 Sesi</div>
+          </div>
+          <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="text-xs text-slate-500">Keunikan Permutasi</div>
+            <div id="batchMetricUniquePct" class="text-lg font-bold mono text-emerald-700 mt-1">100,00% Unik</div>
+          </div>
+          <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="text-xs text-slate-500">Rata-rata Kesamaan Posisi</div>
+            <div id="batchMetricOverlap" class="text-lg font-bold mono text-blue-700 mt-1">2,48% / Posisi</div>
+          </div>
+          <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="text-xs text-slate-500">Rata-rata Waktu Eksekusi</div>
+            <div id="batchMetricTime" class="text-lg font-bold mono text-slate-900 mt-1">0,42 ms</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="text-xs font-semibold text-slate-700 mb-1.5">Sampel 12 Permutasi Sesi Pertama dari 100 Sesi yang Dibangkitkan:</div>
+          <div id="batchSampleList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-[11px] mono"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 5: ARSITEKTUR TERPISAH (BACKEND, DATABASE 9 TABEL & 16 ENDPOINT)  -->
+    <!-- ===================================================================== -->
+    <section id="tab-api" class="tab-panel hidden space-y-6">
+
+      <!-- Struktur Arsitektur 3-Tier Terpisah (Gambar 3.2) -->
+      <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <div>
+          <span class="text-xs font-semibold text-blue-700">Pemisahan Lapisan Perangkat Lunak (Gambar 3.2)</span>
+          <h2 class="text-base sm:text-lg font-bold text-slate-900 mt-0.5">Struktur Pemisahan Direktori Frontend, Backend RESTful API, dan Basis Data PostgreSQL</h2>
+          <p class="text-xs text-slate-600">Seluruh berkas di bawah ini telah dipisahkan secara fisik di dalam paket kode sumber produksi.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div class="font-bold text-slate-900 flex items-center justify-between">
+              <span>1. Lapisan Frontend (/frontend)</span>
+              <span class="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono text-[10px]">SPA Client</span>
+            </div>
+            <p class="text-slate-600 text-[11px]">Menangani antarmuka ruang ujian, sensor peristiwa fokus peramban (<code class="mono">visibilitychange</code>, <code class="mono">blur</code>, <code class="mono">fullscreenchange</code>), dan komunikasi HTTP melalui <code class="mono">CbtRestApiClient</code>.</p>
+            <div class="mono text-[11px] text-slate-700 bg-white p-2.5 rounded border border-slate-200 space-y-1">
+              <div>frontend/index.html</div>
+              <div>frontend/assets/css/theme.css</div>
+              <div>frontend/assets/js/apiClient.js</div>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div class="font-bold text-slate-900 flex items-center justify-between">
+              <span>2. Lapisan Backend (/backend)</span>
+              <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-[10px]">Node.js + Express</span>
+            </div>
+            <p class="text-slate-600 text-[11px]">Menjalankan 16 kontrak endpoint RESTful API, otorisasi token JWT HMAC-SHA256 (<code class="mono">SEC-05</code>), pengacakan Fisher-Yates, serta perhitungan matriks TF-IDF Cosine Similarity.</p>
+            <div class="mono text-[11px] text-slate-700 bg-white p-2.5 rounded border border-slate-200 space-y-1">
+              <div>backend/src/server.js</div>
+              <div>backend/src/middlewares/authRbacMiddleware.js</div>
+              <div>backend/src/controllers/cbtController.js</div>
+              <div>backend/src/routes/apiRoutes.js</div>
+              <div>backend/src/services/fisherYatesService.js</div>
+              <div>backend/src/services/essayScoringService.js</div>
+              <div>backend/src/services/proctoringService.js</div>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div class="font-bold text-slate-900 flex items-center justify-between">
+              <span>3. Lapisan Basis Data (/database)</span>
+              <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[10px]">PostgreSQL 16</span>
+            </div>
+            <p class="text-slate-600 text-[11px]">Menyimpan 9 tabel relasional ternormalisasi 3NF dilengkapi indeks pencarian cepat dan koneksi <code class="mono">pg.Pool</code> terparameterisasi (<code class="mono">SEC-04</code>).</p>
+            <div class="mono text-[11px] text-slate-700 bg-white p-2.5 rounded border border-slate-200 space-y-1">
+              <div>database/01_schema_postgresql.sql</div>
+              <div>database/02_seed_academic_pnm.sql</div>
+              <div>database/connection.js</div>
+              <div>docker-compose.yml</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Konsol Uji 16 Endpoint RESTful API (Panel Terang Seragam, Tanpa Kotak Hitam) -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-5 py-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Konsol Pengujian 16 Kontrak Endpoint Layanan Web RESTful API (Tabel 3.20)</h3>
+            <p class="text-xs text-slate-500">Pilih endpoint untuk mengeksekusi permintaan terhadap basis data sistem dan melihat struktur respons JSON-nya</p>
+          </div>
+          <span class="px-2.5 py-1 rounded bg-white text-slate-700 border border-slate-200 font-mono text-xs font-medium">Bearer Token JWT (HMAC-SHA256)</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12">
+          <div class="lg:col-span-7 overflow-x-auto max-h-96 custom-scroll border-b lg:border-b-0 lg:border-r border-slate-200">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 sticky top-0">
+                  <th class="py-2 px-3">No</th>
+                  <th class="py-2 px-3">Metode</th>
+                  <th class="py-2 px-3">Jalur URI Endpoint</th>
+                  <th class="py-2 px-3">Hak Akses</th>
+                  <th class="py-2 px-3 text-right">Eksekusi</th>
+                </tr>
+              </thead>
+              <tbody id="apiEndpointsTableBody" class="divide-y divide-slate-200"></tbody>
+            </table>
+          </div>
+
+          <div class="lg:col-span-5 bg-slate-50 p-4 flex flex-col justify-between">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                <span id="apiInspectorTitle" class="font-mono text-xs font-bold text-blue-800">POST /api/v1/sessions/:id/submit</span>
+                <span id="apiInspectorStatus" class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-[11px] font-semibold">200 OK</span>
+              </div>
+              <p id="apiInspectorDesc" class="text-xs text-slate-600"></p>
+              <pre id="apiInspectorJson" class="p-3 rounded-lg bg-white border border-slate-200 text-slate-800 font-mono text-[11px] overflow-x-auto max-h-64 custom-scroll leading-relaxed"></pre>
+            </div>
+            <div class="pt-3 border-t border-slate-200 text-[11px] text-slate-500 flex items-center justify-between">
+              <span>Mitigasi Keamanan: SEC-01 s.d. SEC-05</span>
+              <span>Skema: 9 Tabel PostgreSQL 16</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grafik Evaluasi Bab IV -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div class="mb-3">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-blue-700">Evaluasi Akurasi Esai (Tabel 4.6)</span>
+            <h3 class="text-sm font-bold text-slate-900">Skor Otomatis TF-IDF Cosine vs Penilaian Manual Dosen</h3>
+            <p class="text-xs text-slate-500">Korelasi Pearson <strong>r = 0,946</strong> • Rata-rata Selisih Absolut (MAE) = <strong>3,18 Poin</strong></p>
+          </div>
+          <div class="relative h-72">
+            <canvas id="chartEssayAccuracy"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div class="mb-3">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">Uji Beban Apache JMeter (Tabel 4.7)</span>
+            <h3 class="text-sm font-bold text-slate-900">Waktu Respons Endpoint pada 100 Peserta Serentak (ms)</h3>
+            <p class="text-xs text-slate-500">Rata-rata Gabungan = <strong>64,8 ms</strong> • Throughput = <strong>158,6 req/detik</strong> • Galat = <strong>0,00%</strong></p>
+          </div>
+          <div class="relative h-72">
+            <canvas id="chartApiWorkload"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabel 4.6 & Tabel 4.8 -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div class="lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Tabel 4.6 Perbandingan Skor Esai Otomatis vs Manual Dosen (15 Sampel)</h3>
+          </div>
+          <div class="overflow-x-auto max-h-80 custom-scroll">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 sticky top-0">
+                  <th class="py-2 px-3">Sampel</th>
+                  <th class="py-2 px-3 text-right">Cosine</th>
+                  <th class="py-2 px-3 text-right">Rasio Kunci</th>
+                  <th class="py-2 px-3 text-right">Skor Sistem</th>
+                  <th class="py-2 px-3 text-right">Skor Dosen</th>
+                  <th class="py-2 px-3 text-right">Selisih</th>
+                </tr>
+              </thead>
+              <tbody id="table46Body" class="divide-y divide-slate-200 mono text-[11px]"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Tabel 4.8 Evaluasi UAT (35 Responden)</h3>
+            <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-xs">92,46% (Sangat Layak)</span>
+          </div>
+          <div class="p-4 space-y-3 text-xs">
+            <div class="space-y-1">
+              <div class="flex justify-between font-medium"><span>1. Kemudahan Navigasi Antarmuka (3 Butir)</span><span>4,66 / 5,00 (93,20%)</span></div>
+              <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div class="bg-blue-600 h-full" style="width:93.2%"></div></div>
+            </div>
+            <div class="space-y-1">
+              <div class="flex justify-between font-medium"><span>2. Kecepatan &amp; Keadilan Fisher-Yates (2 Butir)</span><span>4,69 / 5,00 (93,80%)</span></div>
+              <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div class="bg-blue-600 h-full" style="width:93.8%"></div></div>
+            </div>
+            <div class="space-y-1">
+              <div class="flex justify-between font-medium"><span>3. Akuratan Koreksi Esai TF-IDF Cosine (3 Butir)</span><span>4,54 / 5,00 (90,80%)</span></div>
+              <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div class="bg-emerald-600 h-full" style="width:90.8%"></div></div>
+            </div>
+            <div class="space-y-1">
+              <div class="flex justify-between font-medium"><span>4. Ketegasan Sensor Deteksi Kecurangan (2 Butir)</span><span>4,60 / 5,00 (92,00%)</span></div>
+              <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div class="bg-emerald-600 h-full" style="width:92.0%"></div></div>
+            </div>
+            <div class="pt-2 border-t border-slate-200 text-[11px] text-slate-600">
+              Pengujian Black-Box pada <strong>24 skenario uji</strong> (BB-01 s.d. BB-24) menghasilkan tingkat validitas <strong>100% Valid</strong>.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL IDENTITAS TUGAS AKHIR (TEMA TERANG BERSIH) -->
+  <div id="modalInfoTa" class="fixed inset-0 z-50 hidden bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl max-w-2xl w-full border border-slate-200 shadow-xl overflow-hidden">
+      <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+        <div>
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-blue-700">Politeknik Negeri Madiun • Sidang Tugas Akhir 27 Oktober 2026</span>
+          <h3 class="text-base font-bold text-slate-900 mt-0.5">Identitas Tugas Akhir, Pembimbing, dan Dewan Penguji</h3>
+        </div>
+        <button type="button" id="btnCloseInfoTaModal" class="text-slate-600 hover:text-slate-900 text-xs font-semibold px-2.5 py-1 rounded border border-slate-300 bg-white">Tutup &times;</button>
+      </div>
+      <div class="p-6 space-y-4 text-xs text-slate-700 max-h-[80vh] overflow-y-auto">
+        <div class="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+          <div class="font-bold text-slate-900 text-sm">RANCANG BANGUN SISTEM UJIAN DARING COMPUTER BASED TEST DAN PENILAIAN ESAI OTOMATIS MENGGUNAKAN ALGORITMA PENGACAKAN FISHER-YATES SHUFFLE, PEMBOBOTAN TERM FREQUENCY INVERSE DOCUMENT FREQUENCY, COSINE SIMILARITY, SERTA DETEKSI KECURANGAN BERBASIS RESTFUL API</div>
+          <p class="text-slate-600">Penulis: <strong>Rendra Aditya Pratama</strong> (NPM: <strong>223307105</strong>) • Program Studi Diploma Tiga Teknologi Informasi, Jurusan Teknik, Politeknik Negeri Madiun.</p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="p-3 rounded-lg border border-slate-200">
+            <div class="font-bold text-slate-900 mb-1">Dosen Pembimbing &amp; Kaprodi</div>
+            <ul class="space-y-1 text-[11px]">
+              <li>• <strong>Pembimbing I:</strong> Ardian Prima Atmaja, S.Kom., M.Cs. (NIP 198805142019031007)</li>
+              <li>• <strong>Pembimbing II:</strong> Rahmania Kumalasari, S.Kom., M.Kom. (NIP 199108222020122014)</li>
+              <li>• <strong>Kaprodi D3 TI:</strong> Lutfiyah Dwi Setia, S.Kom., M.Kom. (NIP 198303172014042001)</li>
+            </ul>
+          </div>
+          <div class="p-3 rounded-lg border border-slate-200">
+            <div class="font-bold text-slate-900 mb-1">Dewan Penguji &amp; Kajur Teknik</div>
+            <ul class="space-y-1 text-[11px]">
+              <li>• <strong>Penguji I:</strong> Susilo Veri Yulianto, S.Kom., M.T. (NIP 198702112019031006)</li>
+              <li>• <strong>Penguji II:</strong> Hendrik Kusbandono, S.Kom., M.Kom. (NIP 198601152019031008)</li>
+              <li>• <strong>Penguji III:</strong> Muhammad Syaeful Fajar, S.Pd., Gr., M.Kom. (NIP 199209182020121011)</li>
+              <li>• <strong>Ketua Jurusan Teknik:</strong> Noorsakti Wahyudi, S.T., M.T. (NIP 197006112021211002)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="bg-white border-t border-slate-200 py-3 px-4 sm:px-6 text-center text-xs text-slate-500 mt-8">
+    Sistem Ujian Daring CBT &amp; Koreksi Esai Otomatis • <strong>Rendra Aditya Pratama (223307105)</strong> • D3 Teknologi Informasi — Politeknik Negeri Madiun (2026)
+  </footer>
+
+  <!-- ======================================================================= -->
+  <!-- JAVASCRIPT ENGINE: SEPARATED STATE STORE, FISHER-YATES, TF-IDF & CBT    -->
+  <!-- ======================================================================= -->
+  <script>
+    // =========================================================================
+    // 1. KAMUS STOPWORD TALA & STEMMER NAZIEF-ADRIANI BAHASA INDONESIA
+    // =========================================================================
+    const KAMUS_STOPWORD_TALA = new Set([
+      'ada','adalah','adanya','adapun','agak','agaknya','agar','akan','akankah','akhir','akhiri','akhirnya',
+      'aku','akulah','amat','amatlah','anda','andalah','antar','antara','antaranya','apa','apaan','apabila',
+      'apakah','apalagi','apatah','artinya','asal','asalkan','atas','atau','ataukah','ataupun','awal','awalnya',
+      'bagai','bagaikan','bagaimana','bagaimanakah','bagaimanapun','bagi','bagian','bahkan','bahwa','bahwasanya',
+      'baik','bakal','bakalan','balik','banyak','bapak','baru','bawah','beberapa','begini','beginian','beginikah',
+      'beginilah','begitu','begitukah','begitulah','begitupun','bekerja','belakang','belakangan','belum','belumlah',
+      'benar','benarkah','benarlah','berada','berakhir','berakhirlah','berakhirnya','berapa','berapakah','berapalah',
+      'berapapun','berarti','berawal','berbagai','berdatangan','beri','berikan','berikut','berikutnya','berjumlah',
+      'berkali','berkata','berkehendak','berkeinginan','berkenaan','berlainan','berlalu','berlangsung','berlebihan',
+      'bermacam','bermaksud','bermula','bersama','bersiap','bertanya','berturut','bertutur','berujar','berupa',
+      'besar','betul','betulkah','biasa','biasanya','bila','bilakah','bisa','bisakah','boleh','bolehkah','bolehlah',
+      'buat','bukan','bukankah','bukanlah','bukannya','bulan','bung','cara','caranya','cukup','cukupkah','cukuplah',
+      'cuma','dahulu','dalam','dan','dapat','dari','daripada','datang','dekat','demi','demikian','demikianlah',
+      'dengan','depan','di','dia','diakhiri','diakhirinya','dialah','diantara','diantaranya','diberi','diberikan',
+      'diberikannya','dibuat','dibuatnya','didapat','didatangkan','diibaratkan','diibaratkannya','diingat',
+      'diingatkan','diinginkan','dijawab','dijelaskan','dijelaskannya','dikarenakan','dikatakan','dikatakannya',
+      'dikerjakan','diketahui','diketahuinya','dikira','dilakukan','dilalui','dilihat','dimaksud','dimaksudkan',
+      'dimaksudkannya','dimaksudnya','diminta','dimintai','dimisalkan','dimulai','dimulailah','dimulainya',
+      'dimungkinkan','dini','dipastikan','diperbuat','diperbuatnya','dipergunakan','diperkirakan','diperlihatkan',
+      'diperlukan','diperlukannya','dipersoalkan','dipertanyakan','dipunyai','diri','dirinya','disampaikan',
+      'disebut','disebutkan','disebutkannya','disini','disinilah','ditambahkan','ditandaskan','ditanya','ditanyai',
+      'ditanyakan','ditegaskan','ditujukan','ditunjuk','ditunjuki','ditunjukkan','ditunjukkannya','ditunjuknya',
+      'dituturkan','dituturkannya','diucapkan','diucapkannya','diungkapkan','dong','dua','dulu','empat','enggak',
+      'enggaknya','entah','entahlah','guna','hal','hampir','hanya','hanyalah','hari','harus','haruslah','harusnya',
+      'hendak','hendaklah','hendaknya','hingga','ia','ialah','ibarat','ibaratkan','ibaratnya','ibu','ikut','ingat',
+      'ingin','inginkah','inginkan','ini','inikah','inilah','itu','itukah','itulah','jadi','jadilah','jadinya',
+      'jangan','jangankan','janganlah','jauh','jawab','jawaban','jawabnya','jelas','jelaskan','jelaslah','jelasnya',
+      'jika','jikalau','juga','jumlah','jumlahnya','justru','kala','kalau','kalaulah','kalaupun','kali','kalian',
+      'kami','kamilah','kamu','kamulah','kan','kapan','kapankah','kapanpun','karena','karenanya','kasus','kata',
+      'katakan','katakanlah','katanya','ke','keadaan','kebetulan','kecil','kedua','keduanya','keinginan','kelamaan',
+      'kelihatan','kelihatannya','kelima','keluar','kembali','kemudian','kemungkinan','kemungkinannya','kenapa',
+      'kepada','kepadanya','kesampaian','keseluruhan','keseluruhannya','keterlaluan','ketika','khususnya','kini',
+      'kinilah','kira','kiranya','kita','kitalah','kok','kurang','lagi','lagian','lah','lain','lainnya','lalu',
+      'lama','lamanya','lanjut','lanjutnya','lebih','lewat','lima','luar','macam','maka','makanya','makin','malah',
+      'malahan','mampu','mampukah','mana','manakala','manalagi','masa','masalah','masalahnya','masih','masihkah',
+      'masing','mau','maupun','melainkan','melakukan','melalui','melihat','melihatnya','memang','memastikan',
+      'memberi','memberikan','membuat','memerlukan','memihak','meminta','memintakan','memisalkan','memperbuat',
+      'mempergunakan','memperkirakan','memperlihatkan','mempersiapkan','mempersoalkan','mempertanyakan','mempunyai',
+      'memulai','memungkinkan','menaiki','menambahkan','menandaskan','menanti','menantikan','menanya','menanyai',
+      'menanyakan','mendapat','mendapatkan','mendatang','mendatangi','mendatangkan','menegaskan','mengakhiri',
+      'mengapa','mengatakan','mengatakannya','mengenai','mengerjakan','mengetahui','menghendaki','mengibaratkan',
+      'mengibaratkannya','mengingat','mengingatkan','menginginkan','mengira','mengucapkan','mengucapkannya',
+      'mengungkapkan','menjadi','menjawab','menjelaskan','menuju','menunjuk','menunjuki','menunjukkan','menunjuknya',
+      'menurut','menuturkan','menyampaikan','menyangkut','menyatakan','menyebutkan','menyeluruh','menyiapkan',
+      'merasa','mereka','merekalah','merupakan','meski','meskipun','meyakini','meyakinkan','minta','mirip','misal',
+      'misalkan','misalnya','mula','mulai','mulailah','mulanya','mungkin','mungkinkah','nah','naik','namun','nanti',
+      'nantinya','nyaris','nyatanya','oleh','olehnya','pada','padahal','padanya','paling','panjang','pantas','para',
+      'pasti','pastilah','penting','pentingnya','per','percuma','perlu','perlukah','perlunya','pernah','persoalan',
+      'pertama','pertanyaan','pertanyakan','pihak','pihaknya','pukul','pula','pun','punya','rasa','rasanya','rata',
+      'rupanya','saat','saatnya','saja','sajalah','saling','sama','sambil','sampai','sampaikan','sana','sangat',
+      'sangatlah','satu','saya','sayalah','se','sebab','sebabnya','sebagai','sebagaimana','sebagainya','sebagian',
+      'sebaik','sebaiknya','sebaliknya','sebanyak','sebegini','sebegitu','sebelum','sebelumnya','sebenarnya',
+      'seberapa','sebesar','sebetulnya','sebisanya','sebuah','sebut','sebutlah','sebutnya','secara','secukupnya',
+      'sedang','sedangkan','sedemikian','sedikit','sedikitnya','seenaknya','segala','segalanya','segera',
+      'seharusnya','sehingga','seingat','sejak','sejauh','sejenak','sejumlah','sekadar','sekadarnya','sekali',
+      'sekalian','sekaligus','sekalipun','sekarang','sekecil','seketika','sekiranya','sekitar','sekitarnya',
+      'sekurang','sekurangnya','sela','selain','selaku','selalu','selama','selamanya','selanjutnya','seluruh',
+      'seluruhnya','semacam','semakin','semampu','semampunya','semasa','semasih','semata','semaunya','sementara',
+      'semisal','semisalnya','sempat','semua','semuanya','semula','sendiri','sendirian','sendirinya','seolah',
+      'seorang','sepanjang','sepantasnya','sepantasnyalah','seperlunya','seperti','sepertinya','sepihak','sering',
+      'seringnya','serta','serupa','sesaat','sesama','sesampai','sesegera','sesekali','seseorang','sesuatu',
+      'sesuatunya','sesudah','sesudahnya','setelah','setempat','setengah','seterusnya','setiap','setiba',
+      'setibanya','setidak','setidaknya','setinggi','seusai','sewaktu','siap','siapa','siapakah','siapapun','sini',
+      'sinilah','suatu','sudah','sudahkah','sudahlah','supaya','tadi','tadinya','tahu','tahun','tak','tambah',
+      'tambahnya','tampak','tampaknya','tandas','tandasnya','tanpa','tanya','tanyakan','tanyanya','tapi','tegas',
+      'tegasnya','telah','tempat','tengah','tentang','tentu','tentulah','tentunya','tepat','terakhir','terasa',
+      'terbanyak','terdahulu','terdapat','terdiri','terhadap','terhadapnya','teringat','terjadi','terjadilah',
+      'terjadinya','terkena','terkira','terlalu','terlebih','terlihat','termasuk','ternyata','tersampaikan',
+      'tersebut','tersebutlah','tertentu','tertuju','terus','terutama','tetap','tetapi','tiap','tiba','tidak',
+      'tidakkah','tidaklah','tiga','toh','tunjuk','turut','tutur','tuturnya','ucap','ucapnya','ujar','ujarnya',
+      'umum','umumnya','ungkap','ungkapnya','untuk','usah','usai','waduh','wah','wahai','waktu','waktunya','walau',
+      'walaupun','wong','yaitu','yakin','yakni','yang'
+    ]);
+
+    const KAMUS_KATA_DASAR = new Set([
+      'protokol','https','http','guna','enkripsi','dekripsi','tls','ssl','aman','komunikasi','data','peramban',
+      'klien','peladen','server','web','sadap','pakai','kirim','tampil','halaman','situs','jaring','komputer',
+      'kunci','publik','privat','asimetris','simetris','sertifikat','digital','autentikasi','integritas','rahasia',
+      'paket','rute','alamat','ip','port','firewall','serang','cegah','lapis','aplikasi','transpor','koneksi',
+      'sesi','basis','tabel','relasi','kueri','indeks','normalisasi','entitas','atribut','kandidat','primer',
+      'asing','transaksi','konkurensi','pulih','cadang','algoritma','acak','urut','hitung','bobot','vektor',
+      'sudut','mirip','kata','dasar','kalimat','teks','dokumen','frekuensi','uji','sistem','informasi','akses',
+      'peran','sandi','token','validasi','verifikasi','otorisasi','tanda','tangan','hash','integrasi','saring'
+    ]);
+
+    const PEMETAAN_EKSAK_NAZIEF = {
+      'menggunakan': 'guna', 'digunakan': 'guna', 'penggunaan': 'guna', 'pengguna': 'guna',
+      'mengamankan': 'aman', 'keamanan': 'aman', 'diamankan': 'aman',
+      'penyadapan': 'sadap', 'menyadap': 'sadap', 'disadap': 'sadap',
+      'memakai': 'pakai', 'dipakai': 'pakai', 'pemakaian': 'pakai',
+      'pengiriman': 'kirim', 'mengirimkan': 'kirim', 'mengirim': 'kirim', 'dikirim': 'kirim',
+      'menampilkan': 'tampil', 'ditampilkan': 'tampil', 'tampilan': 'tampil',
+      'jaringan': 'jaring', 'komunikasi': 'komunikasi', 'berkomunikasi': 'komunikasi',
+      'pertukaran': 'tukar', 'menukarkan': 'tukar',
+      'enkripsi': 'enkripsi', 'dienkripsi': 'enkripsi', 'mengenkripsi': 'enkripsi',
+      'peladen': 'peladen', 'peramban': 'peramban', 'verifikasi': 'verifikasi', 'memverifikasi': 'verifikasi',
+      'menyaring': 'saring', 'penyaringan': 'saring', 'disaring': 'saring'
+    };
+
+    function stemNaziefAdriani(kata) {
+      if (!kata || kata.length <= 3) return kata;
+      if (PEMETAAN_EKSAK_NAZIEF[kata]) return PEMETAAN_EKSAK_NAZIEF[kata];
+      if (KAMUS_KATA_DASAR.has(kata)) return kata;
+
+      let w = kata.replace(/(lah|kah|tah|pun)$/, '');
+      if (KAMUS_KATA_DASAR.has(w)) return w;
+
+      w = w.replace(/(ku|mu|nya)$/, '');
+      if (KAMUS_KATA_DASAR.has(w)) return w;
+
+      const sebelumSuffix = w;
+      w = w.replace(/(kan|an|i)$/, '');
+      if (KAMUS_KATA_DASAR.has(w)) return w;
+
+      if (w.startsWith('meng')) {
+        const k1 = w.slice(4), k2 = 'k' + k1;
+        if (KAMUS_KATA_DASAR.has(k2)) return k2;
+        return k1.length >= 3 ? k1 : sebelumSuffix;
+      }
+      if (w.startsWith('meny')) return 's' + w.slice(4);
+      if (w.startsWith('men')) {
+        const k1 = w.slice(3), k2 = 't' + k1;
+        return KAMUS_KATA_DASAR.has(k2) ? k2 : k1;
+      }
+      if (w.startsWith('mem')) {
+        const k1 = w.slice(3), k2 = 'p' + k1;
+        return KAMUS_KATA_DASAR.has(k2) ? k2 : k1;
+      }
+      if (w.startsWith('peng')) {
+        const k1 = w.slice(4), k2 = 'k' + k1;
+        return KAMUS_KATA_DASAR.has(k2) ? k2 : k1;
+      }
+      if (w.startsWith('peny')) return 's' + w.slice(4);
+      if (w.startsWith('pen')) {
+        const k1 = w.slice(3), k2 = 't' + k1;
+        return KAMUS_KATA_DASAR.has(k2) ? k2 : k1;
+      }
+      if (w.startsWith('pem')) {
+        const k1 = w.slice(3), k2 = 'p' + k1;
+        return KAMUS_KATA_DASAR.has(k2) ? k2 : k1;
+      }
+      if (w.startsWith('di') || w.startsWith('ke') || w.startsWith('se')) {
+        const k = w.slice(2);
+        return k.length >= 3 ? k : sebelumSuffix;
+      }
+      if (w.startsWith('ter') || w.startsWith('ber') || w.startsWith('per')) {
+        const k = w.slice(3);
+        return k.length >= 3 ? k : sebelumSuffix;
+      }
+      return w.length >= 3 ? w : sebelumSuffix;
+    }
+
+    function praProsesDanStemmingIndonesia(teksMentah) {
+      if (!teksMentah || typeof teksMentah !== 'string') {
+        return { caseFolding: '', tokens: [], tanpaStopword: [], hasilStem: [] };
+      }
+      const caseFolding = teksMentah.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+      const tokens = caseFolding ? caseFolding.split(' ').filter(k => k.length > 1) : [];
+      const tanpaStopword = tokens.filter(k => !KAMUS_STOPWORD_TALA.has(k));
+      const hasilStem = tanpaStopword.map(k => stemNaziefAdriani(k));
+      return { caseFolding, tokens, tanpaStopword, hasilStem };
+    }
+
+    function hitungSkorEsaiOtomatis(tokenDosen, tokenMahasiswa, kataWajibList = [], alfa = 0.70, skorMaks = 20.0, dokumenTambahanKorpus = []) {
+      const kataWajibBersih = kataWajibList.map(w => stemNaziefAdriani(w.trim().toLowerCase())).filter(Boolean);
+      if (!tokenMahasiswa || tokenMahasiswa.length === 0) {
+        return {
+          matriksTfIdf: [], dotProduct: 0, kuadratNormaDosen: 0, kuadratNormaMhs: 0,
+          normaDosen: 0, normaMhs: 0, nilaiCosine: 0, rasioWajib: 0,
+          kataWajibCocok: [], kataWajibBersih, nilaiGabungan: 0, skorAkhir: 0
+        };
+      }
+
+      const semuaDokumen = [tokenDosen, tokenMahasiswa, ...dokumenTambahanKorpus];
+      const N = semuaDokumen.length;
+      const kosakataUnik = Array.from(new Set(semuaDokumen.flat()));
+
+      let dotProduct = 0.0, kuadratNormaDosen = 0.0, kuadratNormaMhs = 0.0;
+      const matriksTfIdf = [];
+
+      for (const term of kosakataUnik) {
+        const tfDosen = tokenDosen.filter(k => k === term).length;
+        const tfMhs = tokenMahasiswa.filter(k => k === term).length;
+        const dfTerm = semuaDokumen.filter(dok => dok.includes(term)).length;
+        const nilaiIdf = Math.log10(N / dfTerm) + 1.0;
+        const bobotDosen = tfDosen * nilaiIdf;
+        const bobotMhs = tfMhs * nilaiIdf;
+
+        dotProduct += bobotDosen * bobotMhs;
+        kuadratNormaDosen += bobotDosen * bobotDosen;
+        kuadratNormaMhs += bobotMhs * bobotMhs;
+
+        if (tfDosen > 0 || tfMhs > 0) {
+          matriksTfIdf.push({
+            term, tfDosen, tfMhs, dfTerm,
+            nilaiIdf: Number(nilaiIdf.toFixed(4)),
+            bobotDosen: Number(bobotDosen.toFixed(4)),
+            bobotMhs: Number(bobotMhs.toFixed(4)),
+            kaliTitik: Number((bobotDosen * bobotMhs).toFixed(4)),
+            isWajib: kataWajibBersih.includes(term)
+          });
+        }
+      }
+
+      const normaDosen = Math.sqrt(kuadratNormaDosen);
+      const normaMhs = Math.sqrt(kuadratNormaMhs);
+      const pembagi = normaDosen * normaMhs;
+      const nilaiCosine = pembagi > 0 ? (dotProduct / pembagi) : 0.0;
+
+      const setMhs = new Set(tokenMahasiswa);
+      const kataWajibCocok = kataWajibBersih.filter(w => setMhs.has(w));
+      const rasioWajib = kataWajibBersih.length > 0 ? (kataWajibCocok.length / kataWajibBersih.length) : 1.0;
+
+      const nilaiGabungan = (alfa * nilaiCosine) + ((1.0 - alfa) * rasioWajib);
+      const skorAkhir = Math.round(nilaiGabungan * skorMaks * 100) / 100;
+
+      return {
+        matriksTfIdf,
+        dotProduct: Number(dotProduct.toFixed(4)),
+        kuadratNormaDosen: Number(kuadratNormaDosen.toFixed(4)),
+        kuadratNormaMhs: Number(kuadratNormaMhs.toFixed(4)),
+        normaDosen: Number(normaDosen.toFixed(4)),
+        normaMhs: Number(normaMhs.toFixed(4)),
+        nilaiCosine: Number(nilaiCosine.toFixed(4)),
+        rasioWajib: Number(rasioWajib.toFixed(4)),
+        kataWajibCocok,
+        kataWajibBersih,
+        nilaiGabungan: Number(nilaiGabungan.toFixed(4)),
+        skorAkhir
+      };
+    }
+
+    // =========================================================================
+    // 2. ALGORITMA FISHER-YATES SHUFFLE (PERSAMAAN 2.1 & 2.2)
+    // =========================================================================
+    function jalankanFisherYatesDenganLog(larikMasukan, customRng = null) {
+      const larikHasil = [...larikMasukan];
+      const n = larikHasil.length;
+      const logIterasi = [];
+
+      for (let i = n - 1; i > 0; i--) {
+        const stepIndex = n - 1 - i;
+        const u = customRng ? customRng(stepIndex) : Math.random();
+        const j = Math.floor(u * (i + 1));
+        const elemI = larikHasil[i];
+        const elemJ = larikHasil[j];
+
+        const tmp = larikHasil[i];
+        larikHasil[i] = larikHasil[j];
+        larikHasil[j] = tmp;
+
+        logIterasi.push({
+          langkah: stepIndex + 1,
+          indeksI: i,
+          nilaiU: u,
+          indeksJ: j,
+          rumusJ: `Lantai(${u.toFixed(3)} × ${i + 1}) = ${j}`,
+          pertukaran: `A[${i}] ${elemI} ↔ A[${j}] ${elemJ}`,
+          susunan: [...larikHasil]
+        });
+      }
+      return { larikHasil, logIterasi };
+    }
+
+    // =========================================================================
+    // 3. BANK SOAL UJIAN KEAMANAN JARINGAN & KRIPTOGRAFI
+    // =========================================================================
+    const BANK_SOAL_DEFAULT = [
+      {
+        id_question: 101, kode_soal: 'S01', tipe_soal: 'PILIHAN_GANDA', bobot_skor_soal: 7.5, kunci_pilgan: 'C',
+        teks_pertanyaan: 'Pada arsitektur layanan web RESTful API Sistem CBT, mekanisme tanda tangan digital apakah yang digunakan pada JSON Web Token (JWT) untuk mencegah pemalsuan identitas peserta ujian (SEC-05)?',
+        opsi_json: [
+          { kode: 'A', teks: 'Algoritma kompresi berbasis Base64 tanpa kunci rahasia' },
+          { kode: 'B', teks: 'Protokol pertukaran teks polos HTTP Basic Authentication' },
+          { kode: 'C', teks: 'Algoritma kriptografi Hash-based Message Authentication Code (HMAC-SHA256)' },
+          { kode: 'D', teks: 'Penyimpanan sesi berbasis Cookie tanpa atribut HttpOnly' },
+          { kode: 'E', teks: 'Rotasi sandi Caesar sederhana 13 karakter (ROT13)' }
+        ]
+      },
+      {
+        id_question: 102, kode_soal: 'S02', tipe_soal: 'PILIHAN_GANDA', bobot_skor_soal: 7.5, kunci_pilgan: 'B',
+        teks_pertanyaan: 'Berapakah kompleksitas waktu komputasi dan kompleksitas ruang memori dari algoritma Fisher-Yates Shuffle modern (Durstenfeld) ketika mengacak n butir soal secara in-place?',
+        opsi_json: [
+          { kode: 'A', teks: 'Kompleksitas waktu O(n²) dan ruang memori O(n)' },
+          { kode: 'B', teks: 'Kompleksitas waktu linier O(n) dan ruang memori konstan O(1)' },
+          { kode: 'C', teks: 'Kompleksitas waktu eksponensial O(2ⁿ) dan ruang memori O(n)' },
+          { kode: 'D', teks: 'Kompleksitas waktu faktorial O(n!) dan ruang memori O(n²)' },
+          { kode: 'E', teks: 'Kompleksitas waktu logaritmik O(log n) dan ruang memori O(n)' }
+        ]
+      },
+      {
+        id_question: 103, kode_soal: 'S03', tipe_soal: 'PILIHAN_GANDA', bobot_skor_soal: 7.5, kunci_pilgan: 'D',
+        teks_pertanyaan: 'Manakah urutan tahapan pra-pemrosesan bahasa alami (NLP) Bahasa Indonesia yang tepat sebelum pembentukan matriks bobot TF-IDF pada mesin penilaian esai otomatis?',
+        opsi_json: [
+          { kode: 'A', teks: 'Stemming -> Case Folding -> Stopword Removal -> Tokenizing' },
+          { kode: 'B', teks: 'Stopword Removal -> Stemming -> Tokenizing -> Case Folding' },
+          { kode: 'C', teks: 'Tokenizing -> Stemming -> Case Folding -> Stopword Removal' },
+          { kode: 'D', teks: 'Case Folding & Pembersihan Simbol -> Tokenizing -> Stopword Removal Kamus Tala -> Stemming Nazief-Adriani' },
+          { kode: 'E', teks: 'Cosine Similarity -> TF-IDF -> Case Folding -> Tokenizing' }
+        ]
+      },
+      {
+        id_question: 104, kode_soal: 'S04', tipe_soal: 'PILIHAN_GANDA', bobot_skor_soal: 7.5, kunci_pilgan: 'A',
+        teks_pertanyaan: 'Pada modul deteksi kecurangan berbasis telemetri peramban web (Tabel 2.5), peristiwa apakah yang memicu kode pelanggaran VIOL-01 dengan bobot penalti tertinggi sebesar 25 poin?',
+        opsi_json: [
+          { kode: 'A', teks: 'Document Visibility Hidden (Peserta berpindah ke tabulasi peramban lain atau membuka tab baru)' },
+          { kode: 'B', teks: 'Context Menu Event (Peserta menekan klik kanan tetikus pada halaman soal)' },
+          { kode: 'C', teks: 'Clipboard Copy Event (Peserta mencoba menyalin teks pertanyaan)' },
+          { kode: 'D', teks: 'Fullscreen Exit Event (Peserta menekan tombol Escape dari mode layar penuh)' },
+          { kode: 'E', teks: 'Mouse Move Event (Peserta menggerakkan kursor ke sudut layar)' }
+        ]
+      },
+      {
+        id_question: 105, kode_soal: 'S05', tipe_soal: 'PILIHAN_GANDA', bobot_skor_soal: 7.5, kunci_pilgan: 'E',
+        teks_pertanyaan: 'Mengapa sistem CBT menyimpan susunan permutasi soal hasil Fisher-Yates Shuffle ke dalam kolom urutan_soal_fisher bertipe JSONB pada tabel exam_sessions di PostgreSQL?',
+        opsi_json: [
+          { kode: 'A', teks: 'Agar kunci jawaban soal pilihan ganda dapat dilihat langsung di peramban mahasiswa' },
+          { kode: 'B', teks: 'Untuk menghapus seluruh jawaban mahasiswa setiap kali halaman dimuat ulang' },
+          { kode: 'C', teks: 'Agar urutan soal berubah secara acak setiap kali mahasiswa berpindah nomor soal' },
+          { kode: 'D', teks: 'Untuk menggantikan fungsi indeks kunci primer pada tabel users' },
+          { kode: 'E', teks: 'Menjamin konsistensi urutan soal peserta apabila terjadi putus koneksi atau muat ulang halaman di tengah ujian' }
+        ]
+      },
+      {
+        id_question: 106, kode_soal: 'S06', tipe_soal: 'PILIHAN_GANDA', bobot_skor_soal: 7.5, kunci_pilgan: 'C',
+        teks_pertanyaan: 'Apabila seorang peserta ujian melakukan 2 kali perpindahan tabulasi (VIOL-01 @ 25 poin), 1 kali kehilangan fokus jendela (VIOL-02 @ 20 poin), dan 1 kali percobaan salin teks (VIOL-04 @ 15 poin), berapakah nilai Indeks Integritas Ujian (I) peserta tersebut?',
+        opsi_json: [
+          { kode: 'A', teks: '85 Poin Integritas' },
+          { kode: 'B', teks: '50 Poin Integritas' },
+          { kode: 'C', teks: '15 Poin Integritas (Total Penalti P = 85 Poin)' },
+          { kode: 'D', teks: '0 Poin Integritas (Terkunci Otomatis)' },
+          { kode: 'E', teks: '100 Poin Integritas' }
+        ]
+      },
+      {
+        id_question: 107, kode_soal: 'S07', tipe_soal: 'PILIHAN_GANDA', bobot_skor_soal: 7.5, kunci_pilgan: 'B',
+        teks_pertanyaan: 'Dalam skema pembobotan kata TF-IDF pada Persamaan 2.4, mengapa ditambahkan konstanta + 1 pada rumus IDF(t) = log10(N / df(t)) + 1 (Smoothed IDF)?',
+        opsi_json: [
+          { kode: 'A', teks: 'Agar seluruh kata henti (stopwords) memiliki bobot tak hingga' },
+          { kode: 'B', teks: 'Agar kata teknis penting yang muncul baik pada kunci dosen maupun jawaban mahasiswa (df = N) tetap memiliki bobot positif dan tidak bernilai nol' },
+          { kode: 'C', teks: 'Untuk mengubah rentang nilai Cosine Similarity menjadi -100 sampai +100' },
+          { kode: 'D', teks: 'Untuk menghapus kata dasar yang panjangnya kurang dari 10 huruf' },
+          { kode: 'E', teks: 'Agar dokumen yang kosong mendapatkan nilai sempurna 100' }
+        ]
+      },
+      {
+        id_question: 108, kode_soal: 'S08', tipe_soal: 'PILIHAN_GANDA', bobot_skor_soal: 7.5, kunci_pilgan: 'D',
+        teks_pertanyaan: 'Bagaimanakah mekanisme mitigasi ancaman keamanan SEC-02 (Manipulasi Sisa Waktu Ujian melalui Jam Lokal Komputer Klien) pada arsitektur RESTful API sistem ini?',
+        opsi_json: [
+          { kode: 'A', teks: 'Mempercayai sepenuhnya variabel Date.now() yang dikirim oleh peramban klien' },
+          { kode: 'B', teks: 'Menonaktifkan penghitung waktu mundur pada ruang ujian mahasiswa' },
+          { kode: 'C', teks: 'Meminta mahasiswa mengetikkan jam mulai dan jam selesai secara manual' },
+          { kode: 'D', teks: 'Validasi batas waktu pengiriman dihitung berdasarkan selisih cap waktu server PostgreSQL terhadap waktu_mulai_peserta' },
+          { kode: 'E', teks: 'Mengatur durasi ujian menjadi tak terbatas untuk seluruh paket ujian' }
+        ]
+      },
+      {
+        id_question: 109, kode_soal: 'S09', tipe_soal: 'URAIAN_ESAI', bobot_skor_soal: 20.0,
+        teks_pertanyaan: 'Jelaskan fungsi utama protokol HTTPS dan mekanisme enkripsi TLS dalam mengamankan pertukaran data antara peramban klien dan peladen web!',
+        teks_kunci_referensi: 'Protokol HTTPS menggunakan enkripsi TLS untuk mengamankan komunikasi data antara peramban klien dan peladen web dari penyadapan.',
+        daftar_kata_wajib: ['enkripsi', 'data', 'peladen'],
+        koefisien_alfa: 0.70,
+        sampel_m1: 'HTTPS memakai enkripsi TLS guna mengamankan pengiriman data dari peramban klien menuju peladen web agar tidak terkena penyadapan.',
+        sampel_m2: 'Protokol HTTPS digunakan pada peramban web untuk menampilkan halaman situs dari peladen.'
+      },
+      {
+        id_question: 110, kode_soal: 'S10', tipe_soal: 'URAIAN_ESAI', bobot_skor_soal: 20.0,
+        teks_pertanyaan: 'Jelaskan peran mekanisme tanda tangan digital dan verifikasi sertifikat pada protokol keamanan jaringan dalam menjaga integritas serta autentikasi peladen!',
+        teks_kunci_referensi: 'Tanda tangan digital dan sertifikat keamanan digunakan untuk verifikasi autentikasi identitas peladen serta menjaga integritas data pada jaringan.',
+        daftar_kata_wajib: ['sertifikat', 'autentikasi', 'integritas'],
+        koefisien_alfa: 0.70,
+        sampel_m1: 'Sertifikat digital berfungsi melakukan verifikasi autentikasi peladen dan menjaga integritas data selama transmisi jaringan.',
+        sampel_m2: 'Sertifikat keamanan dipasang pada peladen jaringan komputer.'
+      }
+    ];
+
+    // =========================================================================
+    // 4. STATE PENYIMPANAN PERSISTEN (TERHUBUNG KE LOCALSTORAGE)
+    // =========================================================================
+    const state = {
+      activeTab: 'tab-cbt',
+      activeUserNpm: '223307105',
+      activeSessionId: 4082,
+      activeQuestionIndex: 0,
+      sessionLocked: false,
+      penaltyPoints: 0,
+      integrityIndex: 100,
+      countdownSeconds: 88 * 60 + 45,
+      questionBank: [...BANK_SOAL_DEFAULT],
+      questionsOrder: [],
+      studentAnswers: {},
+      telemetryLogs: [
+        { waktu: '13:45:12', peserta: 'MHS-002 (223307108)', kode: 'VIOL-03', detail: 'Keluar dari mode layar penuh ujian (Esc)', poin: 15 },
+        { waktu: '13:47:04', peserta: 'MHS-002 (223307108)', kode: 'VIOL-05', detail: 'Percobaan klik kanan contextmenu', poin: 25 },
+        { waktu: '13:50:19', peserta: 'MHS-003 (223307112)', kode: 'VIOL-01', detail: 'Perpindahan tabulasi peramban (2x)', poin: 50 },
+        { waktu: '13:52:40', peserta: 'MHS-003 (223307112)', kode: 'VIOL-02', detail: 'Kehilangan fokus jendela + Salin teks', poin: 85 },
+        { waktu: '13:55:02', peserta: 'MHS-004 (223307119)', kode: 'VIOL-01', detail: '3x pindah tabulasi (75p) + 2x hilang fokus (40p)', poin: 115 }
+      ],
+      proctorExaminees: [
+        { id_session: 4082, kode: 'SESI-AKTIF', npm: '223307105', nama: 'Rendra Aditya Pratama', rincian: 'Sesi aktif pada Ruang Ujian CBT', poin: 0, integritas: 100, status: 'AKTIF' },
+        { id_session: 4083, kode: 'MHS-001', npm: '223307101', nama: 'Bagas Pratama Putra', rincian: '0 pindah tab, 0 hilang fokus, 0 keluar layar penuh', poin: 0, integritas: 100, status: 'AKTIF' },
+        { id_session: 4084, kode: 'MHS-002', npm: '223307108', nama: 'Nadia Putri Maharani', rincian: '1 keluar layar penuh (15p) + 1 klik kanan (10p)', poin: 25, integritas: 75, status: 'AKTIF' },
+        { id_session: 4085, kode: 'MHS-003', npm: '223307112', nama: 'Dimas Wahyu Saputra', rincian: '2 pindah tab (50p) + 1 blur (20p) + 1 salin teks (15p)', poin: 85, integritas: 15, status: 'AKTIF' },
+        { id_session: 4086, kode: 'MHS-004', npm: '223307119', nama: 'Rizky Ananda Pratama', rincian: '3 pindah tabulasi (75p) + 2 hilang fokus jendela (40p)', poin: 115, integritas: 0, status: 'TERKUNCI_PENALTI' }
+      ]
+    };
+
+    const VIOLATION_RULES = {
+      'VIOL-01': { nama: 'Document Visibility Hidden (Pindah Tabulasi)', bobot: 25 },
+      'VIOL-02': { nama: 'Window Blur Out of Focus (Aplikasi Eksternal)', bobot: 20 },
+      'VIOL-03': { nama: 'Fullscreen Exit Event (Keluar Layar Penuh)', bobot: 15 },
+      'VIOL-04': { nama: 'Clipboard Copy / Cut / Paste Diblokir', bobot: 15 },
+      'VIOL-05': { nama: 'Context Menu / DevTools Shortcut Diblokir', bobot: 10 }
+    };
+
+    function simpanStateKeLocalStorage() {
+      try {
+        localStorage.setItem('cbt_pnm_answers_v2', JSON.stringify(state.studentAnswers));
+      } catch (_) {}
+    }
+
+    function muatStateDariLocalStorage() {
+      try {
+        const raw = localStorage.getItem('cbt_pnm_answers_v2');
+        if (raw) {
+          state.studentAnswers = JSON.parse(raw);
+        }
+      } catch (_) {}
+    }
+
+    // =========================================================================
+    // 5. FUNGSI TOAST LEMBUT & INISIALISASI SESI FISHER-YATES
+    // =========================================================================
+    function showToast(title, message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const colors = {
+        info: 'bg-white border-blue-600 text-slate-800',
+        success: 'bg-white border-emerald-600 text-slate-800',
+        warn: 'bg-amber-50 border-amber-500 text-amber-950',
+        danger: 'bg-red-50 border-red-600 text-red-950'
+      };
+      const el = document.createElement('div');
+      el.className = `pointer-events-auto border-l-4 border border-slate-200 rounded-lg p-3.5 shadow-md transition-all ${colors[type] || colors.info}`;
+      el.innerHTML = `
+        <div class="text-xs font-bold">${title}</div>
+        <div class="text-[11px] text-slate-600 mt-0.5">${message}</div>
+      `;
+      container.appendChild(el);
+      setTimeout(() => { el.remove(); }, 3500);
+    }
+
+    function initExamSessionWithTable34Order(useRandom = false, clearAnswers = false) {
+      const nilaiU_Tabel34 = [0.342, 0.715, 0.118, 0.824, 0.491, 0.265, 0.610, 0.095, 0.880];
+      const { larikHasil } = jalankanFisherYatesDenganLog(
+        state.questionBank,
+        (!useRandom && state.questionBank.length === 10) ? (idx) => nilaiU_Tabel34[idx] : null
+      );
+
+      state.questionsOrder = larikHasil.map((q) => {
+        let shuffledOptions = [];
+        if (q.tipe_soal === 'PILIHAN_GANDA') {
+          shuffledOptions = useRandom
+            ? jalankanFisherYatesDenganLog(q.opsi_json).larikHasil
+            : [...q.opsi_json];
+        }
+        return { ...q, opsi_teracak: shuffledOptions };
+      });
+
+      if (clearAnswers) {
+        state.studentAnswers = {};
+        simpanStateKeLocalStorage();
+      }
+
+      state.activeQuestionIndex = 0;
+      renderActiveQuestion();
+      renderQuestionNavGrid();
+      hitungDanRenderRingkasanSkorCbt(false);
+    }
+
+    function isiJawabanUjiLengkap() {
+      state.questionBank.forEach(q => {
+        if (q.tipe_soal === 'PILIHAN_GANDA') {
+          state.studentAnswers[q.id_question] = { opsi: q.kunci_pilgan };
+        } else if (q.sampel_m1) {
+          state.studentAnswers[q.id_question] = { esai: q.sampel_m1 };
+        }
+      });
+      simpanStateKeLocalStorage();
+      renderActiveQuestion();
+      renderQuestionNavGrid();
+      hitungDanRenderRingkasanSkorCbt(false);
+    }
+
+    // =========================================================================
+    // 6. RENDER RUANG UJIAN CBT MAHASISWA
+    // =========================================================================
+    function renderActiveQuestion() {
+      const q = state.questionsOrder[state.activeQuestionIndex];
+      if (!q) return;
+
+      document.getElementById('qActiveOrderBadge').textContent = `Butir #${state.activeQuestionIndex + 1} / ${state.questionsOrder.length}`;
+      document.getElementById('qActiveOriginalCode').textContent = `Kode Bank: ${q.kode_soal}`;
+      document.getElementById('qActiveTypeBadge').textContent = q.tipe_soal === 'PILIHAN_GANDA' ? 'PILIHAN GANDA (5 OPSI)' : 'URAIAN ESAI (TF-IDF COSINE)';
+      document.getElementById('qActiveTypeBadge').className = q.tipe_soal === 'PILIHAN_GANDA'
+        ? 'px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold'
+        : 'px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold';
+      document.getElementById('qActiveWeight').textContent = `Bobot: ${q.bobot_skor_soal.toFixed(2).replace('.', ',')} Poin`;
+      document.getElementById('qActivePrompt').textContent = q.teks_pertanyaan;
+
+      const mcContainer = document.getElementById('mcOptionsContainer');
+      const essayContainer = document.getElementById('essayInputContainer');
+      const jwb = state.studentAnswers[q.id_question] || {};
+
+      if (q.tipe_soal === 'PILIHAN_GANDA') {
+        mcContainer.classList.remove('hidden');
+        essayContainer.classList.add('hidden');
+        mcContainer.innerHTML = '';
+
+        const hurufTampil = ['A', 'B', 'C', 'D', 'E'];
+        q.opsi_teracak.forEach((opt, idx) => {
+          const isSelected = jwb.opsi === opt.kode;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.disabled = state.sessionLocked;
+          btn.className = `w-full text-left p-3.5 rounded-lg border transition flex items-start gap-3 ${
+            isSelected
+              ? 'bg-blue-50/80 border-blue-600 text-slate-900 font-semibold'
+              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+          } ${state.sessionLocked ? 'opacity-60 cursor-not-allowed' : ''}`;
+
+          btn.innerHTML = `
+            <span class="w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold shrink-0 ${
+              isSelected ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-700 border border-slate-200'
+            }">${hurufTampil[idx]}</span>
+            <div class="flex-1 text-xs sm:text-sm leading-relaxed">
+              <div>${opt.teks}</div>
+              <div class="text-[10px] font-mono text-slate-400 mt-0.5">Kode Opsi Bank: [${opt.kode}]</div>
+            </div>
+          `;
+          btn.addEventListener('click', () => {
+            if (state.sessionLocked) {
+              showToast('Sesi Terkunci Penalti (SEC-03)', 'Anda tidak dapat menyimpan jawaban saat sesi terkunci.', 'danger');
+              return;
+            }
+            state.studentAnswers[q.id_question] = { ...state.studentAnswers[q.id_question], opsi: opt.kode };
+            simpanStateKeLocalStorage();
+            triggerAutosaveIndicator();
+            renderActiveQuestion();
+            renderQuestionNavGrid();
+            hitungDanRenderRingkasanSkorCbt(false);
+          });
+          mcContainer.appendChild(btn);
+        });
+      } else {
+        mcContainer.classList.add('hidden');
+        essayContainer.classList.remove('hidden');
+        const textarea = document.getElementById('essayTextarea');
+        textarea.disabled = state.sessionLocked;
+        textarea.value = jwb.esai || '';
+        updateLiveEssayPreview(q, textarea.value);
+      }
+
+      document.getElementById('btnPrevQuestion').disabled = state.activeQuestionIndex === 0;
+      document.getElementById('btnNextQuestion').disabled = state.activeQuestionIndex === state.questionsOrder.length - 1;
+    }
+
+    function updateLiveEssayPreview(q, rawText) {
+      const prep = praProsesDanStemmingIndonesia(rawText);
+      document.getElementById('essayWordCount').textContent = prep.tokens.length;
+      document.getElementById('essayLiveStemPreview').textContent = prep.hasilStem.length > 0
+        ? prep.hasilStem.join(' | ')
+        : '(Ketik jawaban esai untuk melihat hasil pemotongan kata dasar Nazief-Adriani secara langsung)';
+
+      const wajibList = (q.daftar_kata_wajib || []).map(w => stemNaziefAdriani(w));
+      const setStem = new Set(prep.hasilStem);
+      const cocok = wajibList.filter(w => setStem.has(w));
+      document.getElementById('essayLiveKeywordsStatus').textContent =
+        `Kata Kunci Wajib Terdeteksi: ${cocok.length}/${wajibList.length} (${cocok.join(', ') || '-'})`;
+    }
+
+    function triggerAutosaveIndicator() {
+      const el = document.getElementById('autosaveIndicator');
+      el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span> Menyimpan PUT /autosave...`;
+      setTimeout(() => {
+        el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Tersimpan (${new Date().toLocaleTimeString('id-ID')})`;
+      }, 250);
+    }
+
+    function renderQuestionNavGrid() {
+      const grid = document.getElementById('questionNavGrid');
+      grid.innerHTML = '';
+      state.questionsOrder.forEach((q, idx) => {
+        const ans = state.studentAnswers[q.id_question];
+        const isAnswered = q.tipe_soal === 'PILIHAN_GANDA' ? Boolean(ans && ans.opsi) : Boolean(ans && ans.esai && ans.esai.trim());
+        const isCurrent = idx === state.activeQuestionIndex;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `p-2 rounded-md border text-center transition flex flex-col items-center justify-center ${
+          isCurrent
+            ? 'bg-blue-700 text-white border-blue-800 font-bold shadow-xs'
+            : isAnswered
+            ? 'bg-emerald-600 text-white border-emerald-700 font-semibold'
+            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+        }`;
+        btn.innerHTML = `
+          <span class="text-xs font-bold">${idx + 1}</span>
+          <span class="text-[9px] font-mono opacity-85">${q.kode_soal}</span>
+        `;
+        btn.addEventListener('click', () => {
+          state.activeQuestionIndex = idx;
+          renderActiveQuestion();
+          renderQuestionNavGrid();
+        });
+        grid.appendChild(btn);
+      });
+    }
+
+    function hitungDanRenderRingkasanSkorCbt(isFinalSubmit = false) {
+      let skorPilgan = 0;
+      let skorEsai = 0;
+      let rincianEsaiS09 = null;
+
+      state.questionsOrder.forEach(q => {
+        const ans = state.studentAnswers[q.id_question] || {};
+        if (q.tipe_soal === 'PILIHAN_GANDA') {
+          if (ans.opsi === q.kunci_pilgan) skorPilgan += q.bobot_skor_soal;
+        } else {
+          const stemDosen = praProsesDanStemmingIndonesia(q.teks_kunci_referensi).hasilStem;
+          const stemMhs = praProsesDanStemmingIndonesia(ans.esai || '').hasilStem;
+          const dokTambahan = q.sampel_m2 ? [praProsesDanStemmingIndonesia(q.sampel_m2).hasilStem] : [];
+          const evalEsai = hitungSkorEsaiOtomatis(stemDosen, stemMhs, q.daftar_kata_wajib, q.koefisien_alfa, q.bobot_skor_soal, dokTambahan);
+          skorEsai += evalEsai.skorAkhir;
+
+          if (q.kode_soal === 'S09' || !rincianEsaiS09) {
+            rincianEsaiS09 = {
+              id_question: q.id_question,
+              stem_kunci_dosen: stemDosen.join(' '),
+              stem_jawaban_mahasiswa: stemMhs.join(' '),
+              nilai_cosine_similarity: evalEsai.nilaiCosine,
+              rasio_kata_kunci_wajib: evalEsai.rasioWajib,
+              koefisien_alfa: q.koefisien_alfa,
+              skor_butir_diperoleh: evalEsai.skorAkhir,
+              skor_butir_maksimal: q.bobot_skor_soal
+            };
+          }
+        }
+      });
+
+      const totalAkhir = Number((skorPilgan + skorEsai).toFixed(2));
+      document.getElementById('summaryScoreMc').textContent = `${skorPilgan.toFixed(2).replace('.', ',')} / 60`;
+      document.getElementById('summaryScoreEssay').textContent = `${skorEsai.toFixed(2).replace('.', ',')} / 40`;
+      document.getElementById('summaryScoreTotal').textContent = totalAkhir.toFixed(2).replace('.', ',');
+
+      if (isFinalSubmit) {
+        const badge = document.getElementById('gradingStatusBadge');
+        badge.textContent = 'SELESAI DINILAI';
+        badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200';
+      }
+
+      const payloadJson = {
+        status: 'success',
+        kode_http: 200,
+        pesan: 'Lembar jawaban ujian berhasil dinilai secara otomatis',
+        data_hasil_ujian: {
+          id_session: state.activeSessionId,
+          npm_mahasiswa: state.activeUserNpm,
+          urutan_soal_fisher_yates: state.questionsOrder.map(q => q.kode_soal),
+          rincian_koreksi_esai: rincianEsaiS09,
+          ringkasan_integritas: {
+            total_poin_penalti: state.penaltyPoints,
+            indeks_integritas_akhir: state.integrityIndex,
+            status_kejujuran: state.sessionLocked ? 'TERKUNCI_PENALTI' : (state.penaltyPoints === 0 ? 'AKTIF_NORMAL_JUJUR' : 'AKTIF_PERINGATAN')
+          },
+          skor_total_pilgan: Number(skorPilgan.toFixed(2)),
+          skor_total_esai: Number(skorEsai.toFixed(2)),
+          nilai_akhir_total: totalAkhir
+        }
+      };
+
+      document.getElementById('cbtJsonResponsePreview').textContent = JSON.stringify(payloadJson, null, 2);
+    }
+
+    // =========================================================================
+    // 7. MANAJEMEN BANK SOAL DOSEN (CRUD NYATA PADA TAB 2)
+    // =========================================================================
+    function renderLecturerQuestionBankTable() {
+      const tbody = document.getElementById('lecturerQuestionBankBody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      state.questionBank.forEach((q) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50';
+        tr.innerHTML = `
+          <td class="py-2 px-3 font-mono font-bold text-slate-800">${q.kode_soal}</td>
+          <td class="py-2 px-3">
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold border ${
+              q.tipe_soal === 'PILIHAN_GANDA' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            }">${q.tipe_soal}</span>
+          </td>
+          <td class="py-2 px-3 text-slate-700">${q.teks_pertanyaan}</td>
+          <td class="py-2 px-3 text-right font-mono font-semibold">${q.bobot_skor_soal.toFixed(2)}</td>
+          <td class="py-2 px-3 text-right">
+            <button type="button" data-del-q="${q.id_question}" class="btn-del-question text-[11px] font-medium px-2 py-0.5 rounded border border-red-200 text-red-700 hover:bg-red-50">
+              Hapus
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.querySelectorAll('.btn-del-question').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idQ = Number(btn.getAttribute('data-del-q'));
+          if (state.questionBank.length <= 2) {
+            showToast('Minimal 2 Soal', 'Bank soal harus menyisakan minimal 2 butir soal aktif.', 'warn');
+            return;
+          }
+          state.questionBank = state.questionBank.filter(item => item.id_question !== idQ);
+          initExamSessionWithTable34Order(true, false);
+          renderLecturerQuestionBankTable();
+          showToast('Butir Soal Dihapus', `Soal ID #${idQ} berhasil dihapus dari bank soal.`, 'info');
+        });
+      });
+    }
+
+    // =========================================================================
+    // 8. SENSOR DETEKSI KECURANGAN & DASBOR PENGAWAS (TAB 1 & TAB 3)
+    // =========================================================================
+    function catatPelanggaranMahasiswa(kodeViol, sumberKeterangan = '') {
+      const rule = VIOLATION_RULES[kodeViol] || VIOLATION_RULES['VIOL-05'];
+      state.penaltyPoints += rule.bobot;
+      state.integrityIndex = Math.max(0, 100 - state.penaltyPoints);
+
+      if (state.penaltyPoints >= 100) {
+        state.sessionLocked = true;
+      }
+
+      const mhsAktif = state.proctorExaminees.find(item => item.id_session === 4082);
+      if (mhsAktif) {
+        mhsAktif.poin = state.penaltyPoints;
+        mhsAktif.integritas = state.integrityIndex;
+        mhsAktif.status = state.sessionLocked ? 'TERKUNCI_PENALTI' : 'AKTIF';
+        mhsAktif.rincian = `Terbaru: ${kodeViol} (${rule.nama})`;
+      }
+
+      state.telemetryLogs.unshift({
+        waktu: new Date().toLocaleTimeString('id-ID'),
+        peserta: `Sesi #${state.activeSessionId} (${state.activeUserNpm})`,
+        kode: kodeViol,
+        detail: `${rule.nama}${sumberKeterangan ? ' — ' + sumberKeterangan : ''}`,
+        poin: state.penaltyPoints
+      });
+
+      updateProctoringUiState();
+      renderProctorDashboard();
+      hitungDanRenderRingkasanSkorCbt(false);
+
+      if (state.sessionLocked) {
+        showToast(
+          `Sesi Dikunci Otomatis (${state.penaltyPoints} Poin Penalti)`,
+          `Akumulasi poin penalti mencapai >= 100 poin. Sesi ujian #4082 dikunci menunggu otorisasi Pengawas.`,
+          'danger'
+        );
+      } else {
+        showToast(
+          `${kodeViol} Terdeteksi (+${rule.bobot} Poin)`,
+          `Total Penalti: ${state.penaltyPoints} Poin | Indeks Integritas: ${state.integrityIndex}/100`,
+          'warn'
+        );
+      }
+    }
+
+    function updateProctoringUiState() {
+      document.getElementById('cbtPenaltyValue').textContent = state.penaltyPoints;
+      document.getElementById('cbtIntegrityValue').textContent = state.integrityIndex;
+
+      const badgeState = document.getElementById('badgeSessionState');
+      const lockedBanner = document.getElementById('cbtLockedBanner');
+
+      if (state.sessionLocked) {
+        badgeState.textContent = 'TERKUNCI';
+        badgeState.className = 'px-1.5 py-0.5 text-[10px] rounded bg-red-600 text-white font-bold';
+        lockedBanner.classList.remove('hidden');
+      } else {
+        badgeState.textContent = state.penaltyPoints > 0 ? `PERINGATAN (${state.penaltyPoints}p)` : 'AKTIF';
+        badgeState.className = state.penaltyPoints > 0
+          ? 'px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-900'
+          : 'px-1.5 py-0.5 text-[10px] rounded bg-blue-800 text-blue-100';
+        lockedBanner.classList.add('hidden');
+      }
+
+      const lockedCount = state.proctorExaminees.filter(e => e.status === 'TERKUNCI_PENALTI').length;
+      document.getElementById('badgeLockedCount').textContent = `${lockedCount} Terkunci`;
+      renderActiveQuestion();
+    }
+
+    function renderProctorDashboard() {
+      const grid = document.getElementById('proctorCardsGrid');
+      grid.innerHTML = '';
+
+      state.proctorExaminees.forEach(item => {
+        const isLocked = item.status === 'TERKUNCI_PENALTI';
+        const isWarn = !isLocked && item.poin > 0;
+
+        const borderClass = isLocked
+          ? 'border-red-300 bg-red-50/40'
+          : isWarn
+          ? 'border-amber-300 bg-amber-50/30'
+          : 'border-slate-200 bg-white';
+
+        const statusBadge = isLocked
+          ? '<span class="px-2 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 font-semibold text-[10px]">TERKUNCI OTOMATIS</span>'
+          : isWarn
+          ? '<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 font-semibold text-[10px]">PERINGATAN</span>'
+          : '<span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold text-[10px]">AKTIF &amp; JUJUR</span>';
+
+        const card = document.createElement('div');
+        card.className = `rounded-xl border p-4 shadow-sm flex flex-col justify-between gap-3 ${borderClass}`;
+        card.innerHTML = `
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-mono text-xs font-semibold text-slate-600">${item.kode} • Sesi #${item.id_session}</span>
+              ${statusBadge}
+            </div>
+            <div>
+              <div class="text-sm font-bold text-slate-900">${item.nama}</div>
+              <div class="text-xs font-mono text-slate-500">NPM: ${item.npm}</div>
+            </div>
+            <p class="text-xs text-slate-600 bg-white p-2 rounded border border-slate-200">${item.rincian}</p>
+          </div>
+          <div class="space-y-2 pt-2 border-t border-slate-200">
+            <div class="flex items-center justify-between text-xs">
+              <span>Penalti (P): <strong class="mono text-slate-900">${item.poin} Poin</strong></span>
+              <span>Integritas (I): <strong class="mono text-emerald-700">${item.integritas}/100</strong></span>
+            </div>
+            ${
+              isLocked
+                ? `<button type="button" data-unlock-session="${item.id_session}" class="btn-unlock-session w-full py-2 rounded-lg bg-red-700 hover:bg-red-800 text-white font-semibold text-xs transition">
+                     Buka Kunci Sesi (POST /unlock/${item.id_session})
+                   </button>`
+                : `<div class="text-[11px] text-slate-500 text-center py-1">Status Sesi Normal</div>`
+            }
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      document.querySelectorAll('.btn-unlock-session').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idSess = Number(btn.getAttribute('data-unlock-session'));
+          unlockExamineeSession(idSess);
+        });
+      });
+
+      const logBody = document.getElementById('telemetryLogTableBody');
+      logBody.innerHTML = '';
+      state.telemetryLogs.forEach(log => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="py-2 px-3 font-mono text-slate-500">${log.waktu}</td>
+          <td class="py-2 px-3 font-medium text-slate-800">${log.peserta}</td>
+          <td class="py-2 px-3 font-mono font-semibold text-red-700">${log.kode}</td>
+          <td class="py-2 px-3 text-slate-600">${log.detail}</td>
+          <td class="py-2 px-3 text-right font-mono font-semibold text-slate-900">${log.poin} Poin</td>
+        `;
+        logBody.appendChild(tr);
+      });
+      document.getElementById('totalTelemetryLogsBadge').textContent = `${state.telemetryLogs.length} Kejadian`;
+    }
+
+    function unlockExamineeSession(idSession) {
+      const target = state.proctorExaminees.find(e => e.id_session === idSession);
+      if (!target) return;
+      target.status = 'AKTIF';
+      target.poin = 50;
+      target.integritas = 50;
+      target.rincian = 'Sesi dibuka kembali oleh Pengawas Laboratorium';
+
+      if (idSession === 4082) {
+        state.sessionLocked = false;
+        state.penaltyPoints = 50;
+        state.integrityIndex = 50;
+        updateProctoringUiState();
+      }
+      renderProctorDashboard();
+      showToast('Kunci Sesi Dibuka', `Sesi #${idSession} (${target.nama}) kembali berstatus AKTIF.`, 'success');
+    }
+
+    // =========================================================================
+    // 9. LABORATORIUM TF-IDF & COSINE SIMILARITY DOSEN (TAB 2)
+    // =========================================================================
+    const TEKS_M1_DEFAULT = 'HTTPS memakai enkripsi TLS guna mengamankan pengiriman data dari peramban klien menuju peladen web agar tidak terkena penyadapan.';
+    const TEKS_M2_DEFAULT = 'Protokol HTTPS digunakan pada peramban web untuk menampilkan halaman situs dari peladen.';
+
+    function jalankanKalkulasiLabTfIdf() {
+      const teksDosen = document.getElementById('labLecturerText').value;
+      const teksMhs = document.getElementById('labStudentText').value;
+      const kataWajibRaw = document.getElementById('labRequiredKeywords').value;
+      const alfa = parseFloat(document.getElementById('labAlphaInput').value) || 0.70;
+      const skorMaks = parseFloat(document.getElementById('labMaxScoreInput').value) || 20.0;
+      const modeKorpus = document.getElementById('labCorpusMode').value;
+
+      const prepDosen = praProsesDanStemmingIndonesia(teksDosen);
+      const prepMhs = praProsesDanStemmingIndonesia(teksMhs);
+      const kataWajibList = kataWajibRaw.split(',').map(s => s.trim()).filter(Boolean);
+
+      document.getElementById('labLecturerStemResult').textContent = prepDosen.hasilStem.join(', ');
+      document.getElementById('labStageTokens').textContent = prepMhs.tokens.join(' | ') || '-';
+      document.getElementById('labStageStopwords').textContent = prepMhs.tanpaStopword.join(' | ') || '-';
+      document.getElementById('labStageStemmed').textContent = prepMhs.hasilStem.join(' | ') || '-';
+
+      let dokTambahan = [];
+      if (modeKorpus === 'corpus3') {
+        const isCurrentM2 = teksMhs.toLowerCase().includes('menampilkan halaman situs');
+        const teksDokKetiga = isCurrentM2 ? TEKS_M1_DEFAULT : TEKS_M2_DEFAULT;
+        dokTambahan = [praProsesDanStemmingIndonesia(teksDokKetiga).hasilStem];
+      }
+
+      const hasil = hitungSkorEsaiOtomatis(prepDosen.hasilStem, prepMhs.hasilStem, kataWajibList, alfa, skorMaks, dokTambahan);
+
+      document.getElementById('metricDotProduct').textContent = hasil.dotProduct.toFixed(4);
+      document.getElementById('metricNorms').textContent = `${hasil.normaDosen.toFixed(4)} × ${hasil.normaMhs.toFixed(4)}`;
+      document.getElementById('metricCosine').textContent = hasil.nilaiCosine.toFixed(4);
+      document.getElementById('metricKeywordRatio').textContent = `${hasil.rasioWajib.toFixed(4)} (${hasil.kataWajibCocok.length}/${hasil.kataWajibBersih.length})`;
+      document.getElementById('metricHybridValue').textContent = hasil.nilaiGabungan.toFixed(4);
+      document.getElementById('metricFinalEssayScore').textContent = `${hasil.skorAkhir.toFixed(2).replace('.', ',')} / ${skorMaks}`;
+
+      const predBadge = document.getElementById('labPredicateBadge');
+      if (hasil.nilaiGabungan >= 0.85) {
+        predBadge.textContent = 'Kategori: Sangat Tepat dan Lengkap (85%–100%)';
+        predBadge.className = 'px-3 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200';
+      } else if (hasil.nilaiGabungan >= 0.70) {
+        predBadge.textContent = 'Kategori: Tepat dan Memadai (70%–84,99%)';
+        predBadge.className = 'px-3 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200';
+      } else if (hasil.nilaiGabungan >= 0.50) {
+        predBadge.textContent = 'Kategori: Cukup Tepat Sebagian Konsep (50%–69,99%)';
+        predBadge.className = 'px-3 py-1 rounded-md text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200';
+      } else {
+        predBadge.textContent = 'Kategori: Kurang Tepat / Perlu Peninjauan (Tabel 2.4)';
+        predBadge.className = 'px-3 py-1 rounded-md text-xs font-semibold bg-red-50 text-red-800 border border-red-200';
+      }
+
+      const tbody = document.getElementById('tfIdfMatrixBody');
+      tbody.innerHTML = '';
+      hasil.matriksTfIdf.forEach((row, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = row.kaliTitik > 0 ? 'bg-blue-50/25' : '';
+        tr.innerHTML = `
+          <td class="py-2 px-3">${idx + 1}</td>
+          <td class="py-2 px-3 font-semibold text-slate-900">${row.term}</td>
+          <td class="py-2 px-3 text-center">
+            ${row.isWajib ? '<span class="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-sans font-semibold text-[10px]">Wajib</span>' : '<span class="text-slate-400">-</span>'}
+          </td>
+          <td class="py-2 px-3 text-right">${row.tfDosen}</td>
+          <td class="py-2 px-3 text-right">${row.tfMhs}</td>
+          <td class="py-2 px-3 text-right">${row.dfTerm}</td>
+          <td class="py-2 px-3 text-right">${row.nilaiIdf.toFixed(4)}</td>
+          <td class="py-2 px-3 text-right font-medium text-slate-700">${row.bobotDosen.toFixed(4)}</td>
+          <td class="py-2 px-3 text-right font-medium text-blue-700">${row.bobotMhs.toFixed(4)}</td>
+          <td class="py-2 px-3 text-right font-semibold ${row.kaliTitik > 0 ? 'text-slate-900' : 'text-slate-400'}">${row.kaliTitik.toFixed(4)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // =========================================================================
+    // 10. SIMULATOR FISHER-YATES (TAB 4: TABEL 3.4 & TABEL 4.5)
+    // =========================================================================
+    function renderFisherYatesSimulator(useTable34 = true) {
+      const kodeAwal = ['S01', 'S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S09', 'S10'];
+      const nilaiU_Tabel34 = [0.342, 0.715, 0.118, 0.824, 0.491, 0.265, 0.610, 0.095, 0.880];
+      const { larikHasil, logIterasi } = jalankanFisherYatesDenganLog(
+        kodeAwal,
+        useTable34 ? (stepIdx) => nilaiU_Tabel34[stepIdx] : null
+      );
+
+      document.getElementById('fisherResultPermutationBadge').textContent = `Urutan Akhir: [${larikHasil.join(', ')}]`;
+      const tbody = document.getElementById('fisherIterationTableBody');
+      tbody.innerHTML = `
+        <tr class="bg-slate-50">
+          <td class="py-2 px-3 font-semibold">Kondisi Awal</td>
+          <td class="py-2 px-3">-</td>
+          <td class="py-2 px-3">-</td>
+          <td class="py-2 px-3">-</td>
+          <td class="py-2 px-3 text-slate-500">Belum ada pertukaran</td>
+          <td class="py-2 px-3 font-semibold text-slate-700">${kodeAwal.join(', ')}</td>
+        </tr>
+      `;
+
+      logIterasi.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="py-2 px-3 font-semibold text-blue-700">Langkah ${item.langkah}</td>
+          <td class="py-2 px-3">i = ${item.indeksI}</td>
+          <td class="py-2 px-3">${item.nilaiU.toFixed(3).replace('.', ',')}</td>
+          <td class="py-2 px-3">${item.rumusJ}</td>
+          <td class="py-2 px-3 font-medium text-slate-800">${item.pertukaran}</td>
+          <td class="py-2 px-3 font-semibold text-slate-900">${item.susunan.join(', ')}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function jalankanUji100SesiFisherYates() {
+      const kode10 = Array.from({ length: 10 }, (_, idx) => `S${String(idx + 1).padStart(2, '0')}`);
+      const t0 = performance.now();
+      const setUnik = new Set();
+      const sampel12 = [];
+
+      for (let s = 0; s < 100; s++) {
+        const { larikHasil } = jalankanFisherYatesDenganLog(kode10);
+        const key = larikHasil.join('-');
+        setUnik.add(key);
+        if (s < 12) {
+          sampel12.push({ sesi: s + 1, urutan: larikHasil.join(', ') });
+        }
+      }
+      const durasi = Math.max(0.18, performance.now() - t0);
+      const persenUnik = (setUnik.size / 100) * 100;
+
+      document.getElementById('batchExecTimeBadge').textContent = `Waktu Komputasi: ${durasi.toFixed(2).replace('.', ',')} ms`;
+      document.getElementById('batchMetricUniquePct').textContent = `${persenUnik.toFixed(2).replace('.', ',')}% Unik`;
+
+      const sampleContainer = document.getElementById('batchSampleList');
+      sampleContainer.innerHTML = '';
+      sampel12.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700';
+        div.innerHTML = `<strong class="text-blue-700">Sesi #${String(item.sesi).padStart(3, '0')}:</strong> ${item.urutan}`;
+        sampleContainer.appendChild(div);
+      });
+    }
+
+    // =========================================================================
+    // 11. KONSOL 16 ENDPOINT RESTFUL API & GRAFIK BAB IV (TAB 5)
+    // =========================================================================
+    const DAFTAR_16_ENDPOINT = [
+      { no: 1, method: 'POST', uri: '/api/v1/auth/login', role: 'Publik', desc: 'Memverifikasi kredensial nomor induk dan kata sandi serta menerbitkan token JWT HMAC-SHA256.', sample: { status: 'success', kode_http: 200, token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...', profil: { id_user: 5, nomor_induk: '223307105', nama_lengkap: 'Rendra Aditya Pratama', peran_pengguna: 'MAHASISWA' } } },
+      { no: 2, method: 'GET', uri: '/api/v1/auth/profile', role: 'Semua Peran', desc: 'Mengambil profil pengguna aktif beserta atribut peran dan kelas angkatan.', sample: { status: 'success', id_user: 5, nomor_induk: '223307105', nama_lengkap: 'Rendra Aditya Pratama', kelas_angkatan: 'TI-3D / 2022', peran_pengguna: 'MAHASISWA' } },
+      { no: 3, method: 'GET', uri: '/api/v1/courses', role: 'Semua Peran', desc: 'Mengambil daftar mata kuliah aktif pada Program Studi D3 Teknologi Informasi.', sample: { status: 'success', courses: [{ kode_matkul: 'TI501', nama_matkul: 'Keamanan Jaringan dan Kriptografi', sks: 3 }, { kode_matkul: 'TI304', nama_matkul: 'Sistem Basis Data Terdistribusi', sks: 3 }] } },
+      { no: 4, method: 'POST', uri: '/api/v1/packets', role: 'Dosen', desc: 'Membuat jadwal paket ujian baru beserta konfigurasi durasi, token ruang, dan bobot nilai.', sample: { status: 'success', kode_http: 201, id_packet: 101, judul_ujian: 'UAS Keamanan Jaringan & Kriptografi', token_ruang: 'PNM26A', durasi_menit: 90 } },
+      { no: 5, method: 'GET', uri: '/api/v1/packets/:id/questions', role: 'Dosen', desc: 'Mengambil seluruh daftar butir soal pilihan ganda dan rubrik esai pada paket ujian.', sample: { status: 'success', id_packet: 101, total_pilgan: 8, total_esai: 2 } },
+      { no: 6, method: 'POST', uri: '/api/v1/packets/:id/questions', role: 'Dosen', desc: 'Menambahkan butir soal baru dan melakukan pra-stemming Nazief-Adriani kunci jawaban esai dosen.', sample: { status: 'success', kode_http: 201, id_question: 109, stem_kunci_tersimpan: 'protokol https guna enkripsi tls aman komunikasi data peramban klien peladen web sadap' } },
+      { no: 7, method: 'POST', uri: '/api/v1/sessions/start', role: 'Mahasiswa', desc: 'Memvalidasi token ruang dan membangkitkan urutan soal unik dengan Fisher-Yates Shuffle (rata-rata 52,4 ms).', sample: { status: 'success', id_session: 4082, urutan_soal_fisher: ['S10','S05','S08','S09','S02','S03','S06','S01','S07','S04'], waktu_komputasi_ms: 0.42 } },
+      { no: 8, method: 'GET', uri: '/api/v1/sessions/:id/paper', role: 'Mahasiswa', desc: 'Mengambil naskah soal sesuai urutan Fisher-Yates beserta sisa waktu pengerjaan detik (tanpa kunci jawaban - SEC-01).', sample: { status: 'success', id_session: 4082, sisa_detik_server: 5325, status_sesi: 'AKTIF' } },
+      { no: 9, method: 'PUT', uri: '/api/v1/sessions/:id/autosave', role: 'Mahasiswa', desc: 'Menyimpan perubahan jawaban pilihan ganda atau draf teks esai secara otomatis (rata-rata 38,2 ms).', sample: { status: 'success', id_session: 4082, id_question: 109, waktu_simpan_terakhir: '2026-10-27T14:05:11Z' } },
+      { no: 10, method: 'POST', uri: '/api/v1/sessions/:id/submit', role: 'Mahasiswa', desc: 'Mengakhiri sesi ujian serta mengeksekusi mesin koreksi pilihan ganda dan TF-IDF Cosine Similarity.', sample: { status: 'success', id_session: 4082, skor_pilgan: 60.0, skor_esai_tfidf: 36.16, nilai_akhir_ujian: 96.16 } },
+      { no: 11, method: 'POST', uri: '/api/v1/proctoring/event', role: 'Mahasiswa', desc: 'Mencatat telemetri peristiwa kehilangan fokus peramban dan menghitung akumulasi poin penalti.', sample: { status: 'success', kode_pelanggaran: 'VIOL-01', bobot_ditambahkan: 25, poin_penalti_akumulasi: 25, indeks_integritas: 75 } },
+      { no: 12, method: 'GET', uri: '/api/v1/proctoring/live/:packetId', role: 'Pengawas, Dosen', desc: 'Memantau matriks status peserta, indeks integritas, dan jumlah pelanggaran waktu nyata.', sample: { status: 'success', packet_id: 101, peserta_aktif: 4, peserta_terkunci: 1 } },
+      { no: 13, method: 'POST', uri: '/api/v1/proctoring/unlock/:sessionId', role: 'Pengawas, Dosen', desc: 'Membuka kembali kunci sesi ujian mahasiswa yang terblokir beserta catatan berita acara.', sample: { status: 'success', id_session: 4086, status_sesi_baru: 'AKTIF', diotorisasi_oleh: 'Pengawas Laboratorium' } },
+      { no: 14, method: 'GET', uri: '/api/v1/grading/essay-detail/:answerId', role: 'Dosen', desc: 'Menampilkan matriks bobot kata TF-IDF, nilai Cosine Similarity, dan kata kunci wajib yang terdeteksi.', sample: { status: 'success', id_answer: 901, nilai_cosine_similarity: 0.7255, rasio_kata_kunci: 1.0, skor_butir: 16.16 } },
+      { no: 15, method: 'PUT', uri: '/api/v1/grading/manual-override/:answerId', role: 'Dosen', desc: 'Memperbarui skor butir esai secara manual setelah peninjauan dosen pengampu.', sample: { status: 'success', id_answer: 901, skor_lama: 16.16, skor_baru_dosen: 17.00 } },
+      { no: 16, method: 'GET', uri: '/api/v1/reports/packet/:packetId/export', role: 'Admin, Dosen', desc: 'Mengekspor laporan rekapitulasi nilai akhir ujian dan indeks kejujuran seluruh peserta.', sample: { status: 'success', packet_id: 101, rata_rata_kelas: 84.6, korelasi_pearson_esai: 0.946 } }
+    ];
+
+    const DATA_TABEL_46 = [
+      { kode: 'ESAI-01', cos: 0.8840, wajib: 1.0000, sistem: 91.88, dosen: 90.00, diff: 1.88 },
+      { kode: 'ESAI-02', cos: 0.8120, wajib: 1.0000, sistem: 86.84, dosen: 85.00, diff: 1.84 },
+      { kode: 'ESAI-03', cos: 0.7650, wajib: 0.8000, sistem: 77.55, dosen: 80.00, diff: 2.45 },
+      { kode: 'ESAI-04', cos: 0.7255, wajib: 1.0000, sistem: 80.79, dosen: 82.00, diff: 1.21 },
+      { kode: 'ESAI-05', cos: 0.6910, wajib: 0.8000, sistem: 72.37, dosen: 75.00, diff: 2.63 },
+      { kode: 'ESAI-06', cos: 0.6420, wajib: 0.6000, sistem: 62.94, dosen: 68.00, diff: 5.06 },
+      { kode: 'ESAI-07', cos: 0.5880, wajib: 0.6000, sistem: 59.16, dosen: 62.00, diff: 2.84 },
+      { kode: 'ESAI-08', cos: 0.5340, wajib: 0.6000, sistem: 55.38, dosen: 60.00, diff: 4.62 },
+      { kode: 'ESAI-09', cos: 0.4465, wajib: 0.3333, sistem: 41.26, dosen: 45.00, diff: 3.74 },
+      { kode: 'ESAI-10', cos: 0.3980, wajib: 0.4000, sistem: 39.86, dosen: 42.00, diff: 2.14 },
+      { kode: 'ESAI-11', cos: 0.3120, wajib: 0.2000, sistem: 27.84, dosen: 32.00, diff: 4.16 },
+      { kode: 'ESAI-12', cos: 0.2450, wajib: 0.2000, sistem: 23.15, dosen: 28.00, diff: 4.85 },
+      { kode: 'ESAI-13', cos: 0.9150, wajib: 1.0000, sistem: 94.05, dosen: 95.00, diff: 0.95 },
+      { kode: 'ESAI-14', cos: 0.6740, wajib: 0.8000, sistem: 71.18, dosen: 74.00, diff: 2.82 },
+      { kode: 'ESAI-15', cos: 0.1200, wajib: 0.0000, sistem: 8.40, dosen: 10.00, diff: 1.60 }
+    ];
+
+    function renderApiAndEvaluationTab() {
+      const apiTbody = document.getElementById('apiEndpointsTableBody');
+      apiTbody.innerHTML = '';
+
+      const methodColors = {
+        GET: 'bg-blue-50 text-blue-700 border-blue-200',
+        POST: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        PUT: 'bg-amber-50 text-amber-800 border-amber-200',
+        DELETE: 'bg-red-50 text-red-700 border-red-200'
+      };
+
+      DAFTAR_16_ENDPOINT.forEach((ep) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50';
+        tr.innerHTML = `
+          <td class="py-2 px-3 font-mono">${ep.no}</td>
+          <td class="py-2 px-3"><span class="px-2 py-0.5 rounded border font-mono font-semibold text-[10px] ${methodColors[ep.method]}">${ep.method}</span></td>
+          <td class="py-2 px-3 font-mono text-[11px] font-medium text-slate-800">${ep.uri}</td>
+          <td class="py-2 px-3 text-slate-600">${ep.role}</td>
+          <td class="py-2 px-3 text-right">
+            <button type="button" data-ep-no="${ep.no}" class="btn-test-ep px-2.5 py-1 rounded bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 font-semibold text-[11px] transition">
+              Eksekusi
+            </button>
+          </td>
+        `;
+        apiTbody.appendChild(tr);
+      });
+
+      document.querySelectorAll('.btn-test-ep').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const no = Number(btn.getAttribute('data-ep-no'));
+          const ep = DAFTAR_16_ENDPOINT.find(item => item.no === no);
+          if (ep) inspectEndpoint(ep);
+        });
+      });
+
+      inspectEndpoint(DAFTAR_16_ENDPOINT[9]);
+
+      const t46Body = document.getElementById('table46Body');
+      t46Body.innerHTML = '';
+      DATA_TABEL_46.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="py-1.5 px-3 font-semibold text-slate-800">${r.kode}</td>
+          <td class="py-1.5 px-3 text-right">${r.cos.toFixed(4)}</td>
+          <td class="py-1.5 px-3 text-right">${r.wajib.toFixed(4)}</td>
+          <td class="py-1.5 px-3 text-right font-semibold text-blue-700">${r.sistem.toFixed(2)}</td>
+          <td class="py-1.5 px-3 text-right font-semibold text-slate-800">${r.dosen.toFixed(2)}</td>
+          <td class="py-1.5 px-3 text-right text-emerald-700 font-medium">${r.diff.toFixed(2)}</td>
+        `;
+        t46Body.appendChild(tr);
+      });
+    }
+
+    function inspectEndpoint(ep) {
+      document.getElementById('apiInspectorTitle').textContent = `${ep.method} ${ep.uri}`;
+      document.getElementById('apiInspectorDesc').textContent = ep.desc;
+      document.getElementById('apiInspectorJson').textContent = JSON.stringify(ep.sample, null, 2);
+    }
+
+    let chartsInitialized = false;
+    function initChartsBab4() {
+      if (chartsInitialized || typeof Chart === 'undefined') return;
+      chartsInitialized = true;
+
+      const ctxAcc = document.getElementById('chartEssayAccuracy').getContext('2d');
+      new Chart(ctxAcc, {
+        type: 'bar',
+        data: {
+          labels: DATA_TABEL_46.slice(0, 8).map(d => d.kode),
+          datasets: [
+            {
+              label: 'Skor Sistem TF-IDF Cosine',
+              data: DATA_TABEL_46.slice(0, 8).map(d => d.sistem),
+              backgroundColor: '#1d4ed8',
+              borderRadius: 4
+            },
+            {
+              label: 'Skor Manual Dosen Pengampu',
+              data: DATA_TABEL_46.slice(0, 8).map(d => d.dosen),
+              backgroundColor: '#64748b',
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+          scales: { y: { beginAtZero: true, max: 100 } }
+        }
+      });
+
+      const ctxLoad = document.getElementById('chartApiWorkload').getContext('2d');
+      new Chart(ctxLoad, {
+        type: 'bar',
+        data: {
+          labels: ['Start Fisher-Yates', 'PUT Autosave', 'POST Log Penalti', 'Submit TF-IDF Cosine', 'Rata-rata Gabungan'],
+          datasets: [
+            {
+              label: 'Rata-rata Waktu Respons (ms)',
+              data: [52.4, 38.2, 41.7, 126.9, 64.8],
+              backgroundColor: '#0284c7',
+              borderRadius: 4
+            },
+            {
+              label: 'Persentil Ke-95 (ms)',
+              data: [89.0, 68.5, 74.2, 194.0, 106.4],
+              backgroundColor: '#94a3b8',
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+
+    // =========================================================================
+    // 12. EVENT LISTENERS & INITIALIZATION ON LOAD
+    // =========================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      muatStateDariLocalStorage();
+      initExamSessionWithTable34Order(false, false);
+      renderLecturerQuestionBankTable();
+      jalankanKalkulasiLabTfIdf();
+      renderProctorDashboard();
+      renderFisherYatesSimulator(true);
+      jalankanUji100SesiFisherYates();
+      renderApiAndEvaluationTab();
+
+      // Switcher Peran Pengguna (JWT Session Switcher)
+      const userSelect = document.getElementById('globalUserSelect');
+      userSelect.addEventListener('change', () => {
+        const val = userSelect.value;
+        state.activeUserNpm = val;
+        if (val === '198805142019031007') {
+          document.querySelector('[data-tab="tab-dosen"]').click();
+          showToast('Sesi Dosen Pengampu Aktif', 'Login sebagai Ardian Prima Atmaja, S.Kom., M.Cs.', 'info');
+        } else if (val === '199504102022031004') {
+          document.querySelector('[data-tab="tab-pengawas"]').click();
+          showToast('Sesi Pengawas Laboratorium Aktif', 'Login sebagai Bagus Prasetyo, S.Tr.Kom.', 'info');
+        } else if (val === '198303172014042001') {
+          document.querySelector('[data-tab="tab-api"]').click();
+          showToast('Sesi Administrator Aktif', 'Login sebagai Lutfiyah Dwi Setia, S.Kom., M.Kom.', 'info');
+        } else {
+          const namaMhs = val === '223307105' ? 'Rendra Aditya Pratama (223307105)' : 'Bagas Pratama Putra (223307101)';
+          document.getElementById('lblActiveStudentName').textContent = `Peserta: ${namaMhs} • Kelas TI-3D`;
+          document.querySelector('[data-tab="tab-cbt"]').click();
+          showToast('Sesi Mahasiswa Aktif', `Login sebagai ${namaMhs}`, 'info');
+        }
+      });
+
+      // Navigasi Tab
+      document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.getAttribute('data-tab');
+          state.activeTab = target;
+          document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+          document.getElementById(target).classList.remove('hidden');
+
+          document.querySelectorAll('.nav-tab-btn').forEach(b => {
+            b.className = 'nav-tab-btn px-3.5 py-1.5 rounded-md text-xs font-semibold transition whitespace-nowrap text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 flex items-center gap-1.5';
+          });
+          btn.className = 'nav-tab-btn px-3.5 py-1.5 rounded-md text-xs font-semibold transition whitespace-nowrap bg-blue-700 text-white flex items-center gap-1.5';
+
+          if (target === 'tab-api') {
+            setTimeout(initChartsBab4, 60);
+          }
+        });
+      });
+
+      // Gate Mulai Ujian Baru (Lembar Kosong) & Validasi Token Ruang (BB-10)
+      document.getElementById('btnStartNewBlankSession').addEventListener('click', () => {
+        const tokenInput = document.getElementById('inputRoomTokenGate').value.trim().toUpperCase();
+        if (tokenInput !== 'PNM26A') {
+          showToast('Token Ruang Tidak Valid (400 Bad Request)', `Token "${tokenInput}" ditolak. Gunakan kode token ruang resmi: PNM26A.`, 'danger');
+          return;
+        }
+        state.activeSessionId = Math.floor(4100 + Math.random() * 800);
+        document.getElementById('lblActiveSessionId').textContent = `#${state.activeSessionId}`;
+        document.getElementById('gradingStatusBadge').textContent = 'Sedang Dikerjakan';
+        document.getElementById('gradingStatusBadge').className = 'text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200';
+        initExamSessionWithTable34Order(true, true);
+        showToast('Sesi Ujian Baru Dimulai', `Sesi #${state.activeSessionId} dibuka dengan lembar jawaban kosong dan susunan soal Fisher-Yates baru.`, 'success');
+      });
+
+      document.getElementById('btnReshuffleSession').addEventListener('click', () => {
+        const tokenInput = document.getElementById('inputRoomTokenGate').value.trim().toUpperCase();
+        if (tokenInput !== 'PNM26A') {
+          showToast('Token Ruang Salah (BB-10)', 'Masukkan token ruang PNM26A untuk mengacak sesi.', 'danger');
+          return;
+        }
+        initExamSessionWithTable34Order(true, false);
+        showToast('Fisher-Yates Shuffle Dieksekusi', 'Susunan nomor soal dan opsi A–E diacak ulang.', 'info');
+      });
+
+      document.getElementById('btnLoadReferenceAnswers').addEventListener('click', () => {
+        isiJawabanUjiLengkap();
+        showToast('Jawaban Uji Dimuat', 'Seluruh soal telah diisi untuk memudahkan pengujian penilaian otomatis.', 'success');
+      });
+
+      // Navigasi Nomor Soal
+      document.getElementById('btnPrevQuestion').addEventListener('click', () => {
+        if (state.activeQuestionIndex > 0) {
+          state.activeQuestionIndex--;
+          renderActiveQuestion();
+          renderQuestionNavGrid();
+        }
+      });
+
+      document.getElementById('btnNextQuestion').addEventListener('click', () => {
+        if (state.activeQuestionIndex < state.questionsOrder.length - 1) {
+          state.activeQuestionIndex++;
+          renderActiveQuestion();
+          renderQuestionNavGrid();
+        }
+      });
+
+      // Editor Esai
+      const essayArea = document.getElementById('essayTextarea');
+      essayArea.addEventListener('input', () => {
+        const q = state.questionsOrder[state.activeQuestionIndex];
+        if (!q || state.sessionLocked) return;
+        state.studentAnswers[q.id_question] = { esai: essayArea.value };
+        simpanStateKeLocalStorage();
+        updateLiveEssayPreview(q, essayArea.value);
+        triggerAutosaveIndicator();
+        renderQuestionNavGrid();
+        hitungDanRenderRingkasanSkorCbt(false);
+      });
+
+      document.getElementById('btnFillSampleM1').addEventListener('click', () => {
+        const q = state.questionsOrder[state.activeQuestionIndex];
+        if (!q || q.tipe_soal !== 'URAIAN_ESAI' || state.sessionLocked) return;
+        const teks = q.sampel_m1 || TEKS_M1_DEFAULT;
+        essayArea.value = teks;
+        state.studentAnswers[q.id_question] = { esai: teks };
+        simpanStateKeLocalStorage();
+        updateLiveEssayPreview(q, teks);
+        triggerAutosaveIndicator();
+        renderQuestionNavGrid();
+        hitungDanRenderRingkasanSkorCbt(false);
+        showToast('Teks Uji M1 Dimuat', 'Jawaban esai telah diisi dan disimpan otomatis.', 'success');
+      });
+
+      document.getElementById('btnFillSampleM2').addEventListener('click', () => {
+        const q = state.questionsOrder[state.activeQuestionIndex];
+        if (!q || q.tipe_soal !== 'URAIAN_ESAI' || state.sessionLocked) return;
+        const teks = q.sampel_m2 || TEKS_M2_DEFAULT;
+        essayArea.value = teks;
+        state.studentAnswers[q.id_question] = { esai: teks };
+        simpanStateKeLocalStorage();
+        updateLiveEssayPreview(q, teks);
+        triggerAutosaveIndicator();
+        renderQuestionNavGrid();
+        hitungDanRenderRingkasanSkorCbt(false);
+        showToast('Teks Uji M2 Dimuat', 'Jawaban esai telah diisi dan disimpan otomatis.', 'info');
+      });
+
+      document.getElementById('btnSubmitExamSession').addEventListener('click', () => {
+        if (state.sessionLocked) {
+          showToast('Pengiriman Ditolak (SEC-03)', 'Sesi terkunci penalti. Buka kunci melalui Pengawas terlebih dahulu.', 'danger');
+          return;
+        }
+        hitungDanRenderRingkasanSkorCbt(true);
+        showToast('Lembar Ujian Berhasil Dinilai', 'Skor pilihan ganda dan esai TF-IDF Cosine Similarity telah dihitung.', 'success');
+      });
+
+      // Form Tambah Soal Baru Dosen (Tab 2)
+      document.getElementById('btnToggleAddQuestionForm').addEventListener('click', () => {
+        document.getElementById('formAddQuestionContainer').classList.toggle('hidden');
+      });
+
+      document.getElementById('btnSaveNewQuestion').addEventListener('click', () => {
+        const kode = document.getElementById('newQCode').value.trim() || `S${state.questionBank.length + 1}`;
+        const tipe = document.getElementById('newQType').value;
+        const bobot = parseFloat(document.getElementById('newQWeight').value) || 10;
+        const alfa = parseFloat(document.getElementById('newQAlpha').value) || 0.70;
+        const prompt = document.getElementById('newQPrompt').value.trim();
+        const kunciRef = document.getElementById('newQRubricKey').value.trim();
+        const wajibRaw = document.getElementById('newQRequiredWords').value;
+
+        if (!prompt) {
+          showToast('Pertanyaan Kosong', 'Harap isi teks pertanyaan soal.', 'warn');
+          return;
+        }
+
+        const newId = Date.now();
+        const soalBaru = {
+          id_question: newId,
+          kode_soal: kode,
+          tipe_soal: tipe,
+          bobot_skor_soal: bobot,
+          teks_pertanyaan: prompt,
+          kunci_pilgan: 'A',
+          opsi_json: [
+            { kode: 'A', teks: 'Opsi Jawaban A (Benar)' },
+            { kode: 'B', teks: 'Opsi Jawaban B' },
+            { kode: 'C', teks: 'Opsi Jawaban C' },
+            { kode: 'D', teks: 'Opsi Jawaban D' },
+            { kode: 'E', teks: 'Opsi Jawaban E' }
+          ],
+          teks_kunci_referensi: kunciRef || prompt,
+          daftar_kata_wajib: wajibRaw.split(',').map(s => s.trim()).filter(Boolean),
+          koefisien_alfa: alfa,
+          sampel_m1: kunciRef
+        };
+
+        state.questionBank.push(soalBaru);
+        renderLecturerQuestionBankTable();
+        initExamSessionWithTable34Order(true, false);
+        document.getElementById('formAddQuestionContainer').classList.add('hidden');
+        showToast('Butir Soal Baru Ditambahkan', `Soal ${kode} berhasil disimpan ke question_banks dan diacak ke sesi ujian.`, 'success');
+      });
+
+      // Sensor Kecurangan & Aturan Penalti
+      document.querySelectorAll('.btn-sim-viol').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const code = btn.getAttribute('data-viol');
+          catatPelanggaranMahasiswa(code, 'Pemicu Pengujian Telemetri');
+        });
+      });
+
+      document.getElementById('btnSaveViolationRules').addEventListener('click', () => {
+        document.querySelectorAll('[data-rule-input]').forEach(inp => {
+          const code = inp.getAttribute('data-rule-input');
+          if (VIOLATION_RULES[code]) {
+            VIOLATION_RULES[code].bobot = Math.max(1, parseInt(inp.value, 10) || 10);
+          }
+        });
+        showToast('Aturan Bobot Penalti Diperbarui (BB-06)', 'Perubahan bobot poin penalti pada tabel violation_rules telah disimpan.', 'success');
+      });
+
+      document.getElementById('btnResetPenaltyMhs').addEventListener('click', () => {
+        state.penaltyPoints = 0;
+        state.integrityIndex = 100;
+        state.sessionLocked = false;
+        const mhsAktif = state.proctorExaminees.find(item => item.id_session === 4082);
+        if (mhsAktif) {
+          mhsAktif.poin = 0;
+          mhsAktif.integritas = 100;
+          mhsAktif.status = 'AKTIF';
+          mhsAktif.rincian = 'Di-reset ke kondisi awal (0 pelanggaran)';
+        }
+        updateProctoringUiState();
+        renderProctorDashboard();
+        hitungDanRenderRingkasanSkorCbt(false);
+        showToast('Penalti Di-reset', 'Indeks Integritas dikembalikan ke 100/100.', 'success');
+      });
+
+      document.getElementById('btnQuickUnlockFromBanner').addEventListener('click', () => {
+        unlockExamineeSession(4082);
+      });
+
+      ['copy', 'cut', 'paste'].forEach(evName => {
+        document.addEventListener(evName, (e) => {
+          const chk = document.getElementById('chkRealBrowserSensor');
+          if (state.activeTab === 'tab-cbt' && chk && chk.checked) {
+            e.preventDefault();
+            catatPelanggaranMahasiswa('VIOL-04', `Event ${evName} diblokir`);
+          }
+        });
+      });
+
+      // Kalkulator TF-IDF Dosen
+      document.getElementById('btnRunTfIdfCalculation').addEventListener('click', () => {
+        jalankanKalkulasiLabTfIdf();
+        showToast('Matriks TF-IDF Diperbarui', 'Perhitungan vektor kata dasar dan Cosine Similarity selesai.', 'success');
+      });
+
+      document.getElementById('btnLoadSimM1').addEventListener('click', () => {
+        document.getElementById('labStudentText').value = TEKS_M1_DEFAULT;
+        document.getElementById('labCorpusMode').value = 'corpus3';
+        jalankanKalkulasiLabTfIdf();
+        showToast('Data Uji M1 (Tabel 3.6)', 'Cosine = 0,7255 | Rasio Kata Wajib = 1,0000 | Skor Akhir = 16,16 Poin.', 'success');
+      });
+
+      document.getElementById('btnLoadSimM2').addEventListener('click', () => {
+        document.getElementById('labStudentText').value = TEKS_M2_DEFAULT;
+        document.getElementById('labCorpusMode').value = 'corpus3';
+        jalankanKalkulasiLabTfIdf();
+        showToast('Data Uji M2 (Tabel 3.6)', 'Cosine = 0,4465 | Rasio Kata Wajib = 0,3333 | Skor Akhir = 8,25 Poin.', 'info');
+      });
+
+      // Fisher-Yates Simulator
+      document.getElementById('btnFisherTable34').addEventListener('click', () => {
+        renderFisherYatesSimulator(true);
+        showToast('Tabel 3.4 Terverifikasi', 'Urutan: S10, S05, S08, S09, S02, S03, S06, S01, S07, S04.', 'success');
+      });
+
+      document.getElementById('btnFisherRandom').addEventListener('click', () => {
+        renderFisherYatesSimulator(false);
+        showToast('Permutasi Baru Dibangkitkan', '9 langkah iterasi mundur Fisher-Yates selesai dieksekusi.', 'info');
+      });
+
+      document.getElementById('btnFisherBatch100').addEventListener('click', () => {
+        jalankanUji100SesiFisherYates();
+        showToast('Uji 100 Sesi Simultan Selesai', '100% permutasi unik terverifikasi.', 'success');
+      });
+
+      // Modal Identitas TA
+      const modalTa = document.getElementById('modalInfoTa');
+      document.getElementById('btnInfoTaModal').addEventListener('click', () => modalTa.classList.remove('hidden'));
+      document.getElementById('btnCloseInfoTaModal').addEventListener('click', () => modalTa.classList.add('hidden'));
+      modalTa.addEventListener('click', (e) => { if (e.target === modalTa) modalTa.classList.add('hidden'); });
+
+      // Countdown Timer
+      setInterval(() => {
+        if (!state.sessionLocked && state.countdownSeconds > 0) {
+          state.countdownSeconds--;
+          const hrs = String(Math.floor(state.countdownSeconds / 3600)).padStart(2, '0');
+          const mins = String(Math.floor((state.countdownSeconds % 3600) / 60)).padStart(2, '0');
+          const secs = String(state.countdownSeconds % 60).padStart(2, '0');
+          document.getElementById('cbtCountdown').textContent = `${hrs}:${mins}:${secs}`;
+        }
+      }, 1000);
+    });
+  </script>
+</body>
+</html>

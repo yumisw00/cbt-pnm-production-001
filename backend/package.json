@@ -1,0 +1,14 @@
+{
+  "name": "cbt-pnm-backend-api",
+  "version": "1.0.0",
+  "description": "Lapisan Backend RESTful API Terpisah — Sistem Ujian Daring CBT & Penilaian Esai Otomatis (Fisher-Yates + TF-IDF Cosine) D3 TI PNM",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "pg": "^8.11.5"
+  }
+}
